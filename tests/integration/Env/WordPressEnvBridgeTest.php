@@ -129,7 +129,7 @@ class WordPressEnvBridgeTest extends TestCase
 
         static::assertSame('wp', $env['DB_NAME']); // example.env
         static::assertSame('192.168.1.255', $env['DB_HOST']); // more.env
-        static::assertSame('I come first.', $env['FOO']); // actual env
+        static::assertSame('I come first.', $env['FOO']); // actual.env
         static::assertSame('new!', $env['NEW']); // offsetSet
     }
 
