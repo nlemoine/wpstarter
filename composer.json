@@ -56,6 +56,7 @@
         "symfony/process": "^5.4.19 || ^6 || ^7",
         "wp-cli/wp-cli": "^v2.9.0",
         "inpsyde/php-coding-standards": "^2@dev",
+        "inpsyde/wp-stubs-versions": "dev-latest",
         "vimeo/psalm": "^5.15.0",
         "phpunit/phpunit": "^9.6.13",
         "mockery/mockery": "^1.6.6",
