@@ -85,6 +85,7 @@ class PackageFinder
         $path = $this->installationManager->getInstallPath($package);
 
         return is_string($path) ? $this->filesystem->normalizePath($path) : '';
+        // return $path ? $this->filesystem->normalizePath($path) : '';
     }
 
     /**
