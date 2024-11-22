@@ -32,7 +32,7 @@ class Io
      * @param IOInterface $io
      * @param Formatter|null $formatter
      */
-    public function __construct(IOInterface $io, Formatter $formatter = null)
+    public function __construct(IOInterface $io, ?Formatter $formatter = null)
     {
         $this->io = $io;
         $this->formatter = $formatter ?: new Formatter();

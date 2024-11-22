@@ -60,7 +60,7 @@ final class Result
      * @param \Throwable|null $error
      * @return Result
      */
-    public static function error(\Throwable $error = null): Result
+    public static function error(?\Throwable $error = null): Result
     {
         return new static(null, $error ?: new \Error('Error.'));
     }
@@ -92,7 +92,7 @@ final class Result
      *
      * phpcs:disable Inpsyde.CodeQuality.ArgumentTypeDeclaration
      */
-    private function __construct($value = null, \Throwable $error = null)
+    private function __construct($value = null, ?\Throwable $error = null)
     {
         // phpcs:enable Inpsyde.CodeQuality.ArgumentTypeDeclaration
 

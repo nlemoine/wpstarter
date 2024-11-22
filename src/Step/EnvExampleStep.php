@@ -170,7 +170,7 @@ final class EnvExampleStep implements FileCreationStepInterface, OptionalStep
      * @param  string|null $source
      * @return int
      */
-    private function copy(Paths $paths, string $destination, string $source = null): int
+    private function copy(Paths $paths, string $destination, ?string $source = null): int
     {
         if ($source === null) {
             $source = $paths->template('.env.example');

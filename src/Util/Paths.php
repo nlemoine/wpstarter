@@ -297,7 +297,7 @@ final class Paths implements \ArrayAccess
      * @param string|null $root
      * @return array<string, string>
      */
-    private function parse(string $root = null): array
+    private function parse(?string $root = null): array
     {
         $vendorDir = (string)$this->config->get('vendor-dir');
         $binDir = (string)$this->config->get('bin-dir');

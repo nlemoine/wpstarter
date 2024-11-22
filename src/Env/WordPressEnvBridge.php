@@ -307,7 +307,7 @@ class WordPressEnvBridge
     /**
      * @param Dotenv|null $dotenv
      */
-    public function __construct(Dotenv $dotenv = null)
+    public function __construct(?Dotenv $dotenv = null)
     {
         $this->dotenv = $dotenv;
     }
@@ -317,7 +317,7 @@ class WordPressEnvBridge
      * @param string|null $path Environment file path
      * @return void
      */
-    public function load(string $file = '.env', string $path = null)
+    public function load(string $file = '.env', ?string $path = null)
     {
         $this->loadFile($this->fullpathFor($file, $path));
     }
@@ -375,7 +375,7 @@ class WordPressEnvBridge
      * @param string|null $path
      * @return void
      */
-    public function loadAppended(string $file, string $path = null)
+    public function loadAppended(string $file, ?string $path = null)
     {
         if (self::$loadedVars === null) {
             $this->load($file, $path);
@@ -729,7 +729,7 @@ class WordPressEnvBridge
      * @param string|null $basePath
      * @return string
      */
-    private function fullpathFor(string $filename, string $basePath = null): string
+    private function fullpathFor(string $filename, ?string $basePath = null): string
     {
         $basePath === null and $basePath = getcwd();
 
