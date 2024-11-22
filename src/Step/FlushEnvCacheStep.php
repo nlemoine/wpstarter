@@ -13,14 +13,28 @@ namespace WeCodeMore\WpStarter\Step;
 
 use WeCodeMore\WpStarter\Config\Config;
 use WeCodeMore\WpStarter\Env\WordPressEnvBridge;
+use WeCodeMore\WpStarter\Util\Locator;
 use WeCodeMore\WpStarter\Util\Paths;
 
 /**
  * Clean environment cache file.
  */
-final class FlushEnvCacheStep implements Step
+final class FlushEnvCacheStep implements ConditionalStep
 {
-    public const NAME = 'flush-env-cache';
+    public const NAME = 'flushenvcache';
+
+    /**
+     * @var \Composer\Util\Filesystem
+     */
+    private $filesystem;
+
+    /**
+     * @param Locator $locator
+     */
+    public function __construct(Locator $locator)
+    {
+        $this->filesystem = $locator->composerFilesystem();
+    }
 
     /**
      * @return string
@@ -37,7 +51,11 @@ final class FlushEnvCacheStep implements Step
      */
     public function allowed(Config $config, Paths $paths): bool
     {
-        return file_exists($paths->wpParent(WordPressEnvBridge::CACHE_DUMP_FILE));
+        /** @var string $envDir */
+        $envDir = $config[Config::ENV_DIR]->unwrapOrFallback($paths->root());
+        $envCacheFile = "{$envDir}/" . WordPressEnvBridge::CACHE_DUMP_FILE;
+
+        return file_exists($envCacheFile);
     }
 
     /**
@@ -47,19 +65,11 @@ final class FlushEnvCacheStep implements Step
      */
     public function run(Config $config, Paths $paths): int
     {
-        $cachedEnv = $paths->wpParent(WordPressEnvBridge::CACHE_DUMP_FILE);
+        /** @var string $envDir */
+        $envDir = $config[Config::ENV_DIR]->unwrapOrFallback($paths->root());
+        $envCacheFile = "{$envDir}/" . WordPressEnvBridge::CACHE_DUMP_FILE;
 
-        if (!is_file($cachedEnv) || !is_readable($cachedEnv)) {
-            return self::ERROR;
-        }
-
-        @unlink($cachedEnv);
-
-        if (!file_exists($cachedEnv)) {
-            return self::SUCCESS;
-        }
-
-        return self::ERROR;
+        return $this->filesystem->remove($envCacheFile) ? self::SUCCESS : self::ERROR;
     }
 
     /**
@@ -76,5 +86,13 @@ final class FlushEnvCacheStep implements Step
     public function success(): string
     {
         return '<comment>Environment cache</comment> cleaned successfully.';
+    }
+
+    /**
+     * @return string
+     */
+    public function conditionsNotMet(): string
+    {
+        return 'environment cache file not found';
     }
 }

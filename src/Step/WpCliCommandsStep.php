@@ -26,10 +26,14 @@ use WeCodeMore\WpStarter\Cli;
  * integrity via hash) and will direct the commands to the phar or to the binary without having
  * to worry about it.
  */
-final class WpCliCommandsStep implements Step
+final class WpCliCommandsStep implements ConditionalStep
 {
+    public const NAME = 'wpcli';
 
-    public const NAME = 'wp-cli';
+    /**
+     * @var Locator
+     */
+    private $locator;
 
     /**
      * @var Io
@@ -37,27 +41,17 @@ final class WpCliCommandsStep implements Step
     private $io;
 
     /**
-     * @var Cli\PhpToolProcess
+     * @var Cli\PhpToolProcess|null
      */
-    private $process;
-
-    /**
-     * @var string[]
-     */
-    private $commands = [];
-
-    /**
-     * @var Cli\WpCliFileData[]
-     */
-    private $files = [];
+    private $process = null;
 
     /**
      * @param Locator $locator
      */
     public function __construct(Locator $locator)
     {
+        $this->locator = $locator;
         $this->io = $locator->io();
-        $this->process = $locator->wpCliProcess();
     }
 
     /**
@@ -75,17 +69,9 @@ final class WpCliCommandsStep implements Step
      */
     public function allowed(Config $config, Paths $paths): bool
     {
-        $commands = $config[Config::WP_CLI_COMMANDS]->unwrapOrFallback([]);
-        $files = $config[Config::WP_CLI_FILES]->unwrapOrFallback([]);
+        [$commands, $files] = $this->extractConfig($config);
 
-        if ($commands || $files) {
-            $this->commands = $commands;
-            $this->files = $files;
-
-            return true;
-        }
-
-        return false;
+        return $commands || $files;
     }
 
     /**
@@ -95,16 +81,14 @@ final class WpCliCommandsStep implements Step
      */
     public function run(Config $config, Paths $paths): int
     {
-        if ((!$this->commands && !$this->files)) {
-            return self::NONE;
-        }
+        [$commands, $files] = $this->extractConfig($config);
 
         $this->io->write('');
         $this->io->writeComment("Running WP CLI commands...");
 
         $checkVer = $this->io->isVerbose()
-            ? $this->process->execute('cli version')
-            : $this->process->executeSilently('cli version');
+            ? $this->process()->execute('cli version')
+            : $this->process()->executeSilently('cli version');
 
         $this->io->write('');
 
@@ -113,14 +97,14 @@ final class WpCliCommandsStep implements Step
         }
 
         $fileCommands = [];
-        if ($this->files) {
-            foreach ($this->files as $file) {
+        if ($files) {
+            foreach ($files as $file) {
                 $command = $this->buildEvalFileCommand($file, $paths);
                 $command and $fileCommands[] = $command;
             }
         }
 
-        $commands = array_merge($fileCommands, $this->commands);
+        $commands = array_merge($fileCommands, $commands);
         $this->initMessage(...$commands);
 
         $continue = true;
@@ -129,7 +113,7 @@ final class WpCliCommandsStep implements Step
             $commandDesc = $this->commandDesc($command);
             $dashes = str_repeat('-', 54 - strlen($commandDesc));
             $this->io->write("<fg=magenta>\$ wp {$commandDesc} {$dashes}</>");
-            $continue = $this->process->execute($command);
+            $continue = $this->process()->execute($command);
             if (!$continue) {
                 $this->io->writeError("'wp {$command}' FAILED! Quitting WP CLI.");
             }
@@ -159,6 +143,41 @@ final class WpCliCommandsStep implements Step
     }
 
     /**
+     * @return string
+     */
+    public function conditionsNotMet(): string
+    {
+        return 'no WP CLI commands  to run found';
+    }
+
+    /**
+     * @param Config $config
+     * @return array{list<string>, list<Cli\WpCliFileData>}
+     */
+    private function extractConfig(Config $config): array
+    {
+        global $locator;
+        $locator = $this->locator;
+        /** @var list<string> $commands */
+        $commands = $config[Config::WP_CLI_COMMANDS]->unwrap();
+        unset($GLOBALS['locator']);
+        /** @var list<Cli\WpCliFileData> $files */
+        $files = $config[Config::WP_CLI_FILES]->unwrap();
+
+        return [$commands, $files];
+    }
+
+    /**
+     * @return Cli\PhpToolProcess
+     */
+    private function process(): Cli\PhpToolProcess
+    {
+        $this->process or $this->process = $this->locator->wpCliProcess();
+
+        return $this->process;
+    }
+
+    /**
      * @param Cli\WpCliFileData $fileData
      * @param Paths $paths
      * @return string
@@ -185,7 +204,7 @@ final class WpCliCommandsStep implements Step
      * @param string ...$commands
      * @return void
      */
-    private function initMessage(string ...$commands)
+    private function initMessage(string ...$commands): void
     {
         $count = count($commands);
         $this->io->writeIfVerbose(sprintf('Will run %d command%s:', $count, $count > 1 ? 's' : ''));

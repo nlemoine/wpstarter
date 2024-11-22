@@ -19,9 +19,9 @@ class UrlDownloaderTest extends IntegrationTestCase
      * @test
      * @covers \WeCodeMore\WpStarter\Util\UrlDownloader
      */
-    public function testFetchFailsForWrongUrl()
+    public function testFetchFailsForWrongUrl(): void
     {
-        $downloader = $this->createUrlDownloader();
+        $downloader = $this->factoryUrlDownloader();
 
         static::assertSame('', $downloader->fetch('-https://example.com'));
     }
@@ -30,9 +30,9 @@ class UrlDownloaderTest extends IntegrationTestCase
      * @test
      * @covers \WeCodeMore\WpStarter\Util\UrlDownloader
      */
-    public function testFetch()
+    public function testFetch(): void
     {
-        $downloader = $this->createUrlDownloader();
+        $downloader = $this->factoryUrlDownloader();
 
         $html = $downloader->fetch('https://www.w3.org/');
 
@@ -44,9 +44,9 @@ class UrlDownloaderTest extends IntegrationTestCase
      * @test
      * @covers \WeCodeMore\WpStarter\Util\UrlDownloader
      */
-    public function testSave()
+    public function testSave(): void
     {
-        $downloader = $this->createUrlDownloader();
+        $downloader = $this->factoryUrlDownloader();
 
         $targetFile = getenv('TESTS_FIXTURES_PATH') . '/w3c.html';
         if (file_exists($targetFile)) {

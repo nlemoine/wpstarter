@@ -25,8 +25,8 @@ class WordPressEnvBridge
         'ALLOW_UNFILTERED_UPLOADS' => Filters::FILTER_BOOL,
         'ALTERNATE_WP_CRON' => Filters::FILTER_BOOL,
         'AUTH_COOKIE' => Filters::FILTER_STRING,
-        'AUTH_KEY' => Filters::FILTER_STRING,
-        'AUTH_SALT' => Filters::FILTER_STRING,
+        'AUTH_KEY' => Filters::FILTER_RAW_STRING,
+        'AUTH_SALT' => Filters::FILTER_RAW_STRING,
         'AUTOMATIC_UPDATER_DISABLED' => Filters::FILTER_BOOL,
         'AUTOSAVE_INTERVAL' => Filters::FILTER_INT,
 
@@ -50,7 +50,7 @@ class WordPressEnvBridge
         'DB_COLLATE' => Filters::FILTER_STRING,
         'DB_HOST' => Filters::FILTER_STRING,
         'DB_NAME' => Filters::FILTER_STRING,
-        'DB_PASSWORD' => Filters::FILTER_STRING,
+        'DB_PASSWORD' => Filters::FILTER_RAW_STRING,
         'DB_USER' => Filters::FILTER_STRING,
         'DIEONDBERROR' => Filters::FILTER_BOOL,
         'DISABLE_WP_CRON' => Filters::FILTER_BOOL,
@@ -72,11 +72,15 @@ class WordPressEnvBridge
         'FS_CONNECT_TIMEOUT' => Filters::FILTER_INT,
         'FS_METHOD' => Filters::FILTER_STRING,
         'FS_TIMEOUT' => Filters::FILTER_INT,
+        'FTP_ASCII' => Filters::FILTER_INT,
+        'FTP_AUTOASCII' => Filters::FILTER_INT,
         'FTP_BASE' => Filters::FILTER_STRING,
+        'FTP_BINARY' => Filters::FILTER_INT,
         'FTP_CONTENT_DIR' => Filters::FILTER_STRING,
+        'FTP_FORCE' => Filters::FILTER_BOOL,
         'FTP_HOST' => Filters::FILTER_STRING,
         'FTP_LANG_DIR' => Filters::FILTER_STRING,
-        'FTP_PASS' => Filters::FILTER_STRING,
+        'FTP_PASS' => Filters::FILTER_RAW_STRING,
         'FTP_PLUGIN_DIR' => Filters::FILTER_STRING,
         'FTP_PRIKEY' => Filters::FILTER_STRING,
         'FTP_PUBKEY' => Filters::FILTER_STRING,
@@ -91,39 +95,45 @@ class WordPressEnvBridge
 
         'IMAGE_EDIT_OVERWRITE' => Filters::FILTER_BOOL,
 
+        'LANGDIR' => Filters::FILTER_STRING,
         'LOGGED_IN_COOKIE' => Filters::FILTER_STRING,
-        'LOGGED_IN_KEY' => Filters::FILTER_STRING,
-        'LOGGED_IN_SALT' => Filters::FILTER_STRING,
+        'LOGGED_IN_KEY' => Filters::FILTER_RAW_STRING,
+        'LOGGED_IN_SALT' => Filters::FILTER_RAW_STRING,
 
         'MEDIA_TRASH' => Filters::FILTER_BOOL,
         'MULTISITE' => Filters::FILTER_BOOL,
+        'MUPLUGINDIR' => Filters::FILTER_STRING,
         'MU_BASE' => Filters::FILTER_STRING,
         'MYSQL_CLIENT_FLAGS' => Filters::FILTER_INT,
         'MYSQL_NEW_LINK' => Filters::FILTER_BOOL,
 
         'NOBLOGREDIRECT' => Filters::FILTER_STRING,
-        'NONCE_KEY' => Filters::FILTER_STRING,
-        'NONCE_SALT' => Filters::FILTER_STRING,
+        'NONCE_KEY' => Filters::FILTER_RAW_STRING,
+        'NONCE_SALT' => Filters::FILTER_RAW_STRING,
         'NO_HEADER_TEXT' => Filters::FILTER_STRING,
 
         'PASS_COOKIE' => Filters::FILTER_STRING,
         'PATH_CURRENT_SITE' => Filters::FILTER_STRING,
+        'PCLZIP_ERROR_EXTERNAL' => Filters::FILTER_INT,
+        'PCLZIP_READ_BLOCK_SIZE' => Filters::FILTER_INT,
+        'PCLZIP_SEPARATOR' => Filters::FILTER_STRING,
+        'PCLZIP_TEMPORARY_DIR' => Filters::FILTER_STRING,
+        'PCLZIP_TEMPORARY_FILE_RATIO' => Filters::FILTER_FLOAT,
         'PLUGINS_COOKIE_PATH' => Filters::FILTER_STRING,
         'POST_BY_EMAIL' => Filters::FILTER_BOOL,
         'PO_MAX_LINE_LEN' => Filters::FILTER_INT,
         'PRIMARY_NETWORK_ID' => Filters::FILTER_INT,
 
-        'RANDOM_COMPAT_READ_BUFFER' => Filters::FILTER_INT,
         'RECOVERY_MODE_COOKIE' => Filters::FILTER_STRING,
         'RECOVERY_MODE_EMAIL' => Filters::FILTER_STRING,
 
         'SAVEQUERIES' => Filters::FILTER_BOOL,
         'SCRIPT_DEBUG' => Filters::FILTER_BOOL,
-        'SECRET_KEY' => Filters::FILTER_STRING,
-        'SECRET_SALT' => Filters::FILTER_STRING,
+        'SECRET_KEY' => Filters::FILTER_RAW_STRING,
+        'SECRET_SALT' => Filters::FILTER_RAW_STRING,
         'SECURE_AUTH_COOKIE' => Filters::FILTER_STRING,
-        'SECURE_AUTH_KEY' => Filters::FILTER_STRING,
-        'SECURE_AUTH_SALT' => Filters::FILTER_STRING,
+        'SECURE_AUTH_KEY' => Filters::FILTER_RAW_STRING,
+        'SECURE_AUTH_SALT' => Filters::FILTER_RAW_STRING,
         'SHORTINIT' => Filters::FILTER_BOOL,
         'SITECOOKIEPATH' => Filters::FILTER_STRING,
         'SITE_ID_CURRENT_SITE' => Filters::FILTER_INT,
@@ -138,12 +148,6 @@ class WordPressEnvBridge
 
         'VHOST' => Filters::FILTER_STRING,
 
-        'WPLANG' => Filters::FILTER_STRING,
-        'WPMU_ACCEL_REDIRECT' => Filters::FILTER_BOOL,
-        'WPMU_PLUGIN_DIR' => Filters::FILTER_STRING,
-        'WPMU_PLUGIN_URL' => Filters::FILTER_STRING,
-        'WPMU_SENDFILE' => Filters::FILTER_BOOL,
-
         'WP_ACCESSIBLE_HOSTS' => Filters::FILTER_STRING,
         'WP_ALLOW_MULTISITE' => Filters::FILTER_BOOL,
         'WP_ALLOW_REPAIR' => Filters::FILTER_BOOL,
@@ -156,7 +160,9 @@ class WordPressEnvBridge
         'WP_DEBUG_DISPLAY' => Filters::FILTER_BOOL,
         'WP_DEBUG_LOG' => Filters::FILTER_STRING_OR_BOOL,
         'WP_DEFAULT_THEME' => Filters::FILTER_STRING,
+        'WP_DEVELOPMENT_MODE' => Filters::FILTER_STRING,
         'WP_DISABLE_FATAL_ERROR_HANDLER' => Filters::FILTER_BOOL,
+        'WP_FEATURE_BETTER_PASSWORDS' => Filters::FILTER_BOOL,
         'WP_HOME' => Filters::FILTER_STRING,
         'WP_HTTP_BLOCK_EXTERNAL' => Filters::FILTER_BOOL,
         'WP_JSON_SERIALIZE_COMPATIBLE' => Filters::FILTER_BOOL,
@@ -171,12 +177,23 @@ class WordPressEnvBridge
         'WP_POST_REVISIONS' => Filters::FILTER_INT_OR_BOOL,
         'WP_PROXY_BYPASS_HOSTS' => Filters::FILTER_STRING,
         'WP_PROXY_HOST' => Filters::FILTER_STRING,
-        'WP_PROXY_PASSWORD' => Filters::FILTER_STRING,
+        'WP_PROXY_PASSWORD' => Filters::FILTER_RAW_STRING,
         'WP_PROXY_PORT' => Filters::FILTER_INT,
         'WP_PROXY_USERNAME' => Filters::FILTER_STRING,
         'WP_SITEURL' => Filters::FILTER_STRING,
         'WP_TEMP_DIR' => Filters::FILTER_STRING,
+        'WP_TEMPLATE_PART_AREA_FOOTER' => Filters::FILTER_STRING,
+        'WP_TEMPLATE_PART_AREA_HEADER' => Filters::FILTER_STRING,
+        'WP_TEMPLATE_PART_AREA_SIDEBAR' => Filters::FILTER_STRING,
+        'WP_TEMPLATE_PART_AREA_UNCATEGORIZED' => Filters::FILTER_STRING,
         'WP_USE_EXT_MYSQL' => Filters::FILTER_BOOL,
+        'WP_USE_THEMES' => Filters::FILTER_BOOL,
+
+        'WPLANG' => Filters::FILTER_STRING,
+        'WPMU_ACCEL_REDIRECT' => Filters::FILTER_BOOL,
+        'WPMU_PLUGIN_DIR' => Filters::FILTER_STRING,
+        'WPMU_PLUGIN_URL' => Filters::FILTER_STRING,
+        'WPMU_SENDFILE' => Filters::FILTER_BOOL,
     ];
 
     public const CACHE_DUMP_FILE = '/.env.cached.php';
@@ -215,11 +232,18 @@ class WordPressEnvBridge
         'preprod' => 'staging',
         'pre-prod' => 'staging',
         'pre-production' => 'staging',
+        'preproduction' => 'staging',
         'test' => 'staging',
+        'tests' => 'staging',
+        'testing' => 'staging',
         'uat' => 'staging',
+        'qa' => 'staging',
+        'acceptance' => 'staging',
+        'accept' => 'staging',
         'production' => 'production',
         'prod' => 'production',
         'live' => 'production',
+        'public' => 'production',
     ];
 
     /**
@@ -233,7 +257,7 @@ class WordPressEnvBridge
     private static $loadedVars;
 
     /**
-     * @var array<string, array{string, bool|int|null|string}>
+     * @var array<string, array{string, bool|int|float|string|null}>
      */
     private static $cache = [];
 
@@ -258,7 +282,7 @@ class WordPressEnvBridge
     private $customFiltersConfig = [];
 
     /**
-     * @var array<string>
+     * @var list<string>
      */
     private $definedConstants = [];
 
@@ -307,7 +331,7 @@ class WordPressEnvBridge
     /**
      * @param Dotenv|null $dotenv
      */
-    public function __construct(?Dotenv $dotenv = null)
+    public function __construct(Dotenv $dotenv = null)
     {
         $this->dotenv = $dotenv;
     }
@@ -317,7 +341,7 @@ class WordPressEnvBridge
      * @param string|null $path Environment file path
      * @return void
      */
-    public function load(string $file = '.env', ?string $path = null)
+    public function load(string $file = '.env', ?string $path = null): void
     {
         $this->loadFile($this->fullpathFor($file, $path));
     }
@@ -350,7 +374,7 @@ class WordPressEnvBridge
      * @param string $path
      * @return void
      */
-    public function loadFile(string $path)
+    public function loadFile(string $path): void
     {
         $loaded = $_ENV['WPSTARTER_ENV_LOADED'] ?? $_SERVER['WPSTARTER_ENV_LOADED'] ?? null;
         if ($loaded !== null) {
@@ -375,7 +399,7 @@ class WordPressEnvBridge
      * @param string|null $path
      * @return void
      */
-    public function loadAppended(string $file, ?string $path = null)
+    public function loadAppended(string $file, ?string $path = null): void
     {
         if (self::$loadedVars === null) {
             $this->load($file, $path);
@@ -420,10 +444,12 @@ class WordPressEnvBridge
      * @param string $name
      * @return mixed
      *
+     * phpcs:disable Generic.Metrics.CyclomaticComplexity
      * phpcs:disable Inpsyde.CodeQuality.ReturnTypeDeclaration
      */
     public function read(string $name)
     {
+        // phpcs:enable Generic.Metrics.CyclomaticComplexity
         // phpcs:enable Inpsyde.CodeQuality.ReturnTypeDeclaration
 
         $cached = self::$cache[$name] ?? null;
@@ -464,16 +490,17 @@ class WordPressEnvBridge
                 break;
         }
 
-        if ($value === null && $readGetEnv) {
+        if (($value === null) && $readGetEnv) {
             $value = getenv($name);
-            $value === false and $value = null;
+            ($value === false) and $value = null;
         }
 
-        if ($value === null) {
-            return null;
-        }
+        // Superglobals can contain anything, but environment variables must be strings.
+        // We can cast later scalar values.
+        // `is_scalar()` also discards null, and that is fine because we want to return null if
+        // that's the value we got here.
 
-        return $this->maybeFilterThenCache($name, (string)$value);
+        return is_scalar($value) ? $this->maybeFilterThenCache($name, (string)$value) : null;
     }
 
     /**
@@ -495,7 +522,7 @@ class WordPressEnvBridge
      * @param string $value
      * @return void
      */
-    public function write(string $name, string $value)
+    public function write(string $name, string $value): void
     {
         if (!$this->isWritable($name)) {
             throw new \BadMethodCallException("{$name} is not a writable ENV var.");
@@ -572,7 +599,7 @@ class WordPressEnvBridge
     /**
      * @return void
      */
-    public function setupConstants()
+    public function setupConstants(): void
     {
         static $done;
         if ($done) {
@@ -605,7 +632,7 @@ class WordPressEnvBridge
     }
 
     /**
-     * @return array
+     * @return list<string>
      */
     public function setupEnvConstants(): array
     {
@@ -643,7 +670,7 @@ class WordPressEnvBridge
     /**
      * @param string $name
      * @param string $value
-     * @return mixed
+     * @return int|float|bool|string|null
      *
      * @psalm-assert Filters $this->filters
      * phpcs:disable Inpsyde.CodeQuality.ReturnTypeDeclaration

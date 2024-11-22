@@ -21,9 +21,9 @@ use WeCodeMore\WpStarter\Util\Paths;
  * This could be seen as the "main" WP Starter step, because it allows WordPress to work by creating
  * a wp-config.php file that includes all the necessary configuration.
  */
-final class WpConfigStep implements FileCreationStepInterface, BlockingStep
+final class WpConfigStep implements FileCreationStep, BlockingStep
 {
-    public const NAME = 'build-wp-config';
+    public const NAME = 'wpconfig';
 
     /**
      * @var \WeCodeMore\WpStarter\Io\Io
@@ -41,14 +41,14 @@ final class WpConfigStep implements FileCreationStepInterface, BlockingStep
     private $filesystem;
 
     /**
-     * @var \Composer\Util\Filesystem
-     */
-    private $composerFilesystem;
-
-    /**
      * @var \WeCodeMore\WpStarter\Util\Salter
      */
     private $salter;
+
+    /**
+     * @var Config
+     */
+    private $config;
 
     /**
      * @param Locator $locator
@@ -58,8 +58,8 @@ final class WpConfigStep implements FileCreationStepInterface, BlockingStep
         $this->io = $locator->io();
         $this->builder = $locator->fileContentBuilder();
         $this->filesystem = $locator->filesystem();
-        $this->composerFilesystem = $locator->composerFilesystem();
         $this->salter = $locator->salter();
+        $this->config = $locator->config();
     }
 
     /**
@@ -86,7 +86,10 @@ final class WpConfigStep implements FileCreationStepInterface, BlockingStep
      */
     public function targetPath(Paths $paths): string
     {
-        return $paths->wpParent('wp-config.php');
+        /** @var string $dir */
+        $dir = $this->config[Config::WP_CONFIG_PATH]->unwrap();
+
+        return "{$dir}/wp-config.php";
     }
 
     /**
@@ -96,7 +99,9 @@ final class WpConfigStep implements FileCreationStepInterface, BlockingStep
      */
     public function run(Config $config, Paths $paths): int
     {
-        $from = $this->composerFilesystem->normalizePath($paths->wpParent());
+        /** @var string $from */
+        $from = $this->config[Config::WP_CONFIG_PATH]->unwrap();
+        $wpParent = $paths->wpParent();
 
         $autoload = $paths->vendor('autoload.php');
 
@@ -114,16 +119,24 @@ final class WpConfigStep implements FileCreationStepInterface, BlockingStep
             $envBootstrapDir = $this->relPath($from, $paths->root($envBootstrapDir));
         }
 
-        /** @var string $envDir */
-        $envDir = $config[Config::ENV_DIR]->unwrapOrFallback($paths->root());
+        /** @var string $envDirName */
+        $envDirName = $config[Config::ENV_DIR]->unwrap();
+        $envDir = $paths->root($envDirName);
+        $this->filesystem->createDir($envDir);
         $envRelDir = $this->relPath($from, $envDir);
+        $rootRelDir = $this->relPath($from, $paths->root());
 
         $register = $config[Config::REGISTER_THEME_FOLDER]->unwrapOrFallback(false);
         ($register === OptionalStep::ASK) and $register = $this->askForRegister();
 
         $contentRelDir = $this->relPath($from, $paths->wpContent());
-
+        $contentRelUrlPath = $this->relPath($wpParent, $paths->wpContent());
         $wpRelDir = $this->relPath($from, $paths->wp());
+        $wpRelUrlDir = $this->relPath($wpParent, $paths->wp());
+
+        $target = $this->targetPath($paths);
+        $wpConfigLoaderPath = $paths->wpParent('wp-config.php');
+        $compatMode = $wpConfigLoaderPath === $target;
 
         $vars = [
             'AUTOLOAD_PATH' => $this->relPath("{$from}/index.php", $autoload, false),
@@ -131,22 +144,24 @@ final class WpConfigStep implements FileCreationStepInterface, BlockingStep
             'EARLY_HOOKS_FILE' => $earlyHookFile,
             'ENV_BOOTSTRAP_DIR' => $envBootstrapDir ?: $envRelDir,
             'ENV_FILE_NAME' => $config[Config::ENV_FILE]->unwrapOrFallback('.env'),
+            'WPSTARTER_PATH' => $compatMode ? $envRelDir : $rootRelDir,
             'ENV_REL_PATH' => $envRelDir,
             'REGISTER_THEME_DIR' => $register ? 'true' : 'false',
             'WP_CONTENT_PATH' => $contentRelDir,
-            'WP_CONTENT_URL_RELATIVE' => $this->stripDot($contentRelDir),
+            'WP_CONTENT_URL_RELATIVE' => $this->stripDot($contentRelUrlPath),
             'WP_INSTALL_PATH' => $wpRelDir,
-            'WP_SITEURL_RELATIVE' => $this->stripDot($wpRelDir),
+            'WP_SITEURL_RELATIVE' => $this->stripDot($wpRelUrlDir),
         ];
 
-        $built = $this->builder->build(
-            $paths,
-            'wp-config.php',
-            array_merge($vars, $this->salter->keys())
-        );
+        $allVars = array_merge($vars, $this->salter->keys());
+        $built = $this->builder->build($paths, 'wp-config.php', $allVars);
 
-        if (!$this->filesystem->writeContent($built, $this->targetPath($paths))) {
+        if (!$this->filesystem->writeContent($built, $target)) {
             return self::ERROR;
+        }
+
+        if (!$compatMode) {
+            return $this->buildLoader($target, $wpConfigLoaderPath, $paths);
         }
 
         return self::SUCCESS;
@@ -189,11 +204,11 @@ final class WpConfigStep implements FileCreationStepInterface, BlockingStep
      */
     private function relPath(string $from, string $to, bool $bothDirs = true): string
     {
-        $path = $this->composerFilesystem->normalizePath(
-            $this->composerFilesystem->findShortestPath($from, $to, $bothDirs)
+        $path = $this->filesystem->normalizePath(
+            $this->filesystem->findShortestPath($from, $to, $bothDirs)
         );
 
-        return "/{$path}";
+        return rtrim("/{$path}", '/');
     }
 
     /**
@@ -207,5 +222,28 @@ final class WpConfigStep implements FileCreationStepInterface, BlockingStep
         strpos($path, '../') === 0 and $path = dirname($path);
 
         return $path;
+    }
+
+    /**
+     * @param string $wpConfigPath
+     * @param string $wpConfigLoaderPath
+     * @param Paths $paths
+     * @return int
+     */
+    private function buildLoader(
+        string $wpConfigPath,
+        string $wpConfigLoaderPath,
+        Paths $paths
+    ): int {
+
+        $built = $this->builder->build(
+            $paths,
+            'wp-config-loader.php',
+            ['WP_CONFIG_PATH' => $this->relPath($wpConfigLoaderPath, $wpConfigPath, false)]
+        );
+
+        return $this->filesystem->writeContent($built, $wpConfigLoaderPath)
+            ? Step::SUCCESS
+            : Step::ERROR;
     }
 }

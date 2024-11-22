@@ -42,7 +42,7 @@ class Io
      * @param  string $message
      * @return void
      */
-    public function writeSuccess(string $message)
+    public function writeSuccess(string $message): void
     {
         $lines = $this->formatter->createListWithPrefix('  - <info>[OK]</info>', $message);
         array_map([$this->io, 'write'], $lines);
@@ -52,7 +52,7 @@ class Io
      * @param string ...$lines
      * @return void
      */
-    public function writeSuccessBlock(string ...$lines)
+    public function writeSuccessBlock(string ...$lines): void
     {
         $this->writeCenteredColorBlock('green', 'black', ...$lines);
     }
@@ -89,7 +89,7 @@ class Io
      * @param string ...$lines
      * @return void
      */
-    public function writeCommentBlock(string ...$lines)
+    public function writeCommentBlock(string ...$lines): void
     {
         $this->writeFilledColorBlock('yellow', 'black', ...$lines);
     }
@@ -98,7 +98,7 @@ class Io
      * @param string $line
      * @return void
      */
-    public function writeError(string $line)
+    public function writeError(string $line): void
     {
         $lines = $this->formatter->ensureDefaultLinesLength($line);
         foreach ($lines as $line) {
@@ -110,7 +110,7 @@ class Io
      * @param string $line
      * @return void
      */
-    public function writeErrorIfVerbose(string $line)
+    public function writeErrorIfVerbose(string $line): void
     {
         $this->io->writeError("  <fg=red>{$line}</>", true, IOInterface::VERBOSE);
     }
@@ -119,7 +119,7 @@ class Io
      * @param string ...$lines
      * @return void
      */
-    public function writeErrorBlock(string ...$lines)
+    public function writeErrorBlock(string ...$lines): void
     {
         $this->writeFilledErrorColorBlock('red', 'white', ...$lines);
     }
@@ -128,7 +128,7 @@ class Io
      * @param string $line
      * @return void
      */
-    public function write(string $line)
+    public function write(string $line): void
     {
         $lines = $this->formatter->ensureDefaultLinesLength($line);
         foreach ($lines as $line) {
@@ -140,7 +140,7 @@ class Io
      * @param string $line
      * @return void
      */
-    public function writeIfVerbose(string $line)
+    public function writeIfVerbose(string $line): void
     {
         $this->io->write("  {$line}", true, IOInterface::VERBOSE);
     }
@@ -187,7 +187,7 @@ class Io
         try {
             $answer = null;
             $count = 0;
-            while (!is_string($answer) || !$question->isValidAnswer((string)$answer)) {
+            while ($answer === null) {
                 if ($count > 4) {
                     usleep(250000);
                     throw $tooMuchTriesException;
@@ -196,12 +196,8 @@ class Io
                     $this->writeComment('Invalid answer, try again.');
                     usleep(250000);
                 }
-                $answer = $this->io->ask($questionText, $question->defaultAnswerKey());
-                /**
-                 * @psalm-suppress DocblockTypeContradiction
-                 * @psalm-suppress RedundantConditionGivenDocblockType
-                 */
-                $answer = is_string($answer) ? strtolower(trim($answer)) : null;
+                $asked = $this->io->ask($questionText, $question->defaultAnswerKey());
+                $answer = is_string($asked) ? $question->filterAnswer($asked) : null;
                 $count++;
             }
 
@@ -211,11 +207,14 @@ class Io
                 throw $exception;
             }
 
-            $default = $question->defaultAnswerText();
-            $this->writeError($exception->getMessage());
-            $this->writeError("Going to use default: \"{$default}\".");
+            $default = $question->defaultAnswerKey();
+            if ($default) {
+                $this->writeError($exception->getMessage());
+                $defaultText = $question->defaultAnswerText();
+                $this->writeError("Going to use default: \"{$defaultText}\".");
+            }
 
-            return $question->defaultAnswerKey();
+            return $default;
         }
     }
 
@@ -229,7 +228,7 @@ class Io
         string $background,
         string $frontground = 'black',
         string ...$lines
-    ) {
+    ): void {
 
         $this->writeColorBlock($background, $frontground, false, false, ...$lines);
     }
@@ -244,7 +243,7 @@ class Io
         string $background,
         string $frontground = 'black',
         string ...$lines
-    ) {
+    ): void {
 
         $this->writeColorBlock($background, $frontground, true, false, ...$lines);
     }
@@ -259,7 +258,7 @@ class Io
         string $background,
         string $frontground = 'black',
         string ...$lines
-    ) {
+    ): void {
 
         $this->writeColorBlock($background, $frontground, false, true, ...$lines);
     }
@@ -274,7 +273,7 @@ class Io
         string $background,
         string $frontground = 'black',
         string ...$lines
-    ) {
+    ): void {
 
         $this->writeColorBlock($background, $frontground, true, true, ...$lines);
     }

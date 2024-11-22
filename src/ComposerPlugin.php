@@ -37,11 +37,9 @@ final class ComposerPlugin implements
     Capable,
     CommandProvider
 {
-
     public const EXTRA_KEY = 'wpstarter';
     public const EXTENSIONS_TYPE = 'wpstarter-extension';
 
-    public const MODE = 'mode';
     public const MODE_NONE = 0;
     public const MODE_COMMAND = 1;
     public const MODE_COMPOSER_INSTALL = 4;
@@ -107,6 +105,7 @@ final class ComposerPlugin implements
             Step\ContentDevStep::NAME => Step\ContentDevStep::class,
             Step\WpCliConfigStep::NAME => Step\WpCliConfigStep::class,
             Step\WpCliCommandsStep::NAME => Step\WpCliCommandsStep::class,
+            Step\VcsIgnoreCheckStep::NAME => Step\VcsIgnoreCheckStep::class,
         ];
     }
 
@@ -131,7 +130,7 @@ final class ComposerPlugin implements
      * @param IOInterface $io
      * @return void
      */
-    public function activate(Composer $composer, IOInterface $io)
+    public function activate(Composer $composer, IOInterface $io): void
     {
         $this->composer = $composer;
         $this->io = $io;
@@ -146,7 +145,7 @@ final class ComposerPlugin implements
      *
      * @return void
      */
-    public function setupAutoload()
+    public function setupAutoload(): void
     {
         static::$autoload or spl_autoload_register(
             $this->psr4LoaderFor(__NAMESPACE__, __DIR__),
@@ -161,7 +160,7 @@ final class ComposerPlugin implements
      * @param PackageEvent $event
      * @return void
      */
-    public function onPrePackageOperation(PackageEvent $event)
+    public function onPrePackageOperation(PackageEvent $event): void
     {
         $operation = $event->getOperation();
 
@@ -181,7 +180,7 @@ final class ComposerPlugin implements
      * @param Event $event
      * @return void
      */
-    public function onAutorunBecauseInstall(Event $event)
+    public function onAutorunBecauseInstall(Event $event): void
     {
         $this->mode or $this->mode = self::MODE_COMPOSER_INSTALL;
         $this->setupAutoload();
@@ -196,7 +195,7 @@ final class ComposerPlugin implements
      * @param Event $event
      * @return void
      */
-    public function onAutorunBecauseUpdate(Event $event)
+    public function onAutorunBecauseUpdate(Event $event): void
     {
         $this->mode = self::MODE_COMPOSER_UPDATE;
         $this->onAutorunBecauseInstall($event);
@@ -205,9 +204,12 @@ final class ComposerPlugin implements
     /**
      * @param Util\SelectedStepsFactory $factory
      * @return void
+     *
+     * phpcs:disable Inpsyde.CodeQuality.FunctionLength
      */
-    public function run(Util\SelectedStepsFactory $factory)
+    public function run(Util\SelectedStepsFactory $factory): void
     {
+        // phpcs:enable Inpsyde.CodeQuality.FunctionLength
         $this->mode or $this->mode = self::MODE_COMMAND;
 
         /*
@@ -241,16 +243,22 @@ final class ComposerPlugin implements
 
         try {
             $this->loadExtensions();
-            $this->checkWp($config);
+            $isFullRun = $factory->isFullRun();
 
-            $isSelectedCommandMode = $factory->isSelectedCommandMode();
-            $isSelectedCommandMode or $this->logo();
+            $isFullRun and $this->checkWp($config);
 
-            if ($config[Config\Config::SKIP_DB_CHECK]->is(false)) {
-                $this->locator->dbChecker()->check();
+            $isFullRun and $this->logo();
+            $this->compatibilityMode($config);
+
+            if ($factory->isListMode()) {
+                $factory->selectAndFactory($this->locator, $this->composer);
+
+                return;
             }
 
-            $runner = $isSelectedCommandMode
+            $isFullRun and $this->checkDb($config);
+
+            $runner = $factory->isSelectedCommandMode()
                 ? Step\Steps::commandMode($this->locator, $this->composer)
                 : Step\Steps::composerMode($this->locator, $this->composer);
 
@@ -332,9 +340,8 @@ final class ComposerPlugin implements
     /**
      * @return void
      */
-    private function convertErrorsToExceptions()
+    private function convertErrorsToExceptions(): void
     {
-        /** @psalm-suppress InvalidArgument */
         set_error_handler(
             static function (int $code, string $msg, string $file = '', int $line = 0) {
                 if ($file && $line) {
@@ -350,7 +357,7 @@ final class ComposerPlugin implements
     /**
      * @return void
      */
-    private function loadExtensions()
+    private function loadExtensions(): void
     {
         $packages = $this->locator->packageFinder()->findByType(self::EXTENSIONS_TYPE);
 
@@ -363,7 +370,7 @@ final class ComposerPlugin implements
      * @param PackageInterface $package
      * @return void
      */
-    private function loadExtensionAutoload(PackageInterface $package)
+    private function loadExtensionAutoload(PackageInterface $package): void
     {
         $autoload = $package->getExtra()['wpstarter-autoload'] ?? null;
         if (!$autoload || !is_array($autoload)) {
@@ -404,9 +411,9 @@ final class ComposerPlugin implements
 
     /**
      * @param Config\Config $config
-     * @return string
+     * @return void
      */
-    private function checkWp(Config\Config $config): string
+    private function checkWp(Config\Config $config)
     {
         $requireWp = $config[Config\Config::REQUIRE_WP]->not(false);
         /** @var string $fallbackVer */
@@ -429,8 +436,6 @@ final class ComposerPlugin implements
         if ($wpVersion && !$fallbackVer) {
             $config[Config\Config::WP_VERSION] = $fallbackVer;
         }
-
-        return $wpVersion;
     }
 
     /**
@@ -472,7 +477,7 @@ final class ComposerPlugin implements
     /**
      * @return void
      */
-    private function logo()
+    private function logo(): void
     {
         // phpcs:disable
         $logo = <<<LOGO
@@ -487,11 +492,35 @@ LOGO;
     }
 
     /**
+     * @param Config\Config $config
+     * @return void
+     */
+    private function checkDb(Config\Config $config): void
+    {
+        $check = $config[Config\Config::DB_CHECK];
+        $skipped = $config[Config\Config::SKIP_DB_CHECK]->not(false);
+        if ($skipped) {
+            $this->io->write(
+                sprintf(
+                    'The configuration "%s" is deprecated, please use "%s" instead.',
+                    Config\Config::SKIP_DB_CHECK,
+                    Config\Config::DB_CHECK
+                )
+            );
+        }
+        if ($check->not(false) && !$skipped) {
+            $check->is(Util\DbChecker::HEALTH_CHECK)
+                ? $this->locator->dbChecker()->mysqlcheck()
+                : $this->locator->dbChecker()->check();
+        }
+    }
+
+    /**
      * @param Composer $composer
      * @param IOInterface $io
      * @return void
      */
-    public function deactivate(Composer $composer, IOInterface $io)
+    public function deactivate(Composer $composer, IOInterface $io): void
     {
         // noop
     }
@@ -501,8 +530,31 @@ LOGO;
      * @param IOInterface $io
      * @return void
      */
-    public function uninstall(Composer $composer, IOInterface $io)
+    public function uninstall(Composer $composer, IOInterface $io): void
     {
         // noop
+    }
+
+    /**
+     * @param Config\Config $config
+     * @return void
+     */
+    private function compatibilityMode(Config\Config $config): void
+    {
+        $paths = $this->locator->paths();
+        $root = $paths->root();
+        if ($config[Config\Config::WP_CONFIG_PATH]->is($root)) {
+            return;
+        }
+
+        $wpParent = $paths->wpParent();
+
+        $this->io->isVerbose() and $this->locator->io()->writeCommentBlock(
+            'WP Starter will write wp-config.php in',
+            '"compatibility mode".',
+            "That is, it will be written inside '{$wpParent}' where it was located "
+            . 'before updating WP Starter.',
+            "If starting a project from scratch, it would be written in root folder '{$root}'."
+        );
     }
 }

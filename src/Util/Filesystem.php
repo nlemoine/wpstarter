@@ -16,9 +16,18 @@ use Composer\Util\Platform;
 
 /**
  * Wrapper for Composer Filesystem with custom functionalities.
+ *
+ * @method string normalizePath(string $path)
+ * @method string findShortestPath(string $from, string $to, bool $bothDirs = false)
  */
 class Filesystem
 {
+    public const OP_AUTO = 'auto';
+    public const OP_COPY = 'copy';
+    public const OP_SYMLINK = 'symlink';
+    public const OP_NONE = 'none';
+    public const OPERATIONS = [self::OP_AUTO, self::OP_COPY, self::OP_SYMLINK, self::OP_NONE];
+
     /**
      * @var ComposerFilesystem
      */
@@ -30,6 +39,20 @@ class Filesystem
     public function __construct(ComposerFilesystem $filesystem)
     {
         $this->filesystem = $filesystem;
+    }
+
+    /**
+     * @param string $name
+     * @param array $arguments
+     * @return mixed
+     */
+    public function __call(string $name, array $arguments = [])
+    {
+        if (!method_exists($this->filesystem, $name)) {
+            throw new \Error(sprintf('Call to undefined method %s::%s()', __CLASS__, $name));
+        }
+
+        return $this->filesystem->{$name}(...$arguments);
     }
 
     /**
@@ -166,6 +189,55 @@ class Filesystem
     }
 
     /**
+     * @param string $sourcePath
+     * @param string $targetPath
+     * @return bool
+     */
+    public function symlinkOrCopy(string $sourcePath, string $targetPath): bool
+    {
+        if ($this->symlink($sourcePath, $targetPath)) {
+            return true;
+        }
+
+        $realpath = realpath($sourcePath);
+        if (!$realpath) {
+            return false;
+        }
+
+        return is_dir($realpath)
+            ? $this->copyDir($realpath, $targetPath)
+            : $this->copyFile($realpath, $targetPath);
+    }
+
+    /**
+     * @param string $source
+     * @param string $target
+     * @param string $operation
+     * @return bool
+     */
+    public function symlinkOrCopyOperation(string $source, string $target, string $operation): bool
+    {
+        if (!in_array($operation, self::OPERATIONS, true) || ($operation === self::OP_NONE)) {
+            return false;
+        }
+
+        try {
+            switch ($operation) {
+                case Filesystem::OP_COPY:
+                    return is_file($source)
+                        ? $this->copyFile($source, $target)
+                        : $this->copyDir($source, $target);
+                case Filesystem::OP_SYMLINK:
+                    return $this->symlink($source, $target);
+                default:
+                    return $this->symlinkOrCopy($source, $target);
+            }
+        } catch (\Throwable $throwable) {
+            return false;
+        }
+    }
+
+    /**
      * Create a directory recursively, derived from wp_makedir_p.
      *
      * @param string $targetPath
@@ -186,7 +258,7 @@ class Filesystem
             }
 
             $stat = @stat($parentDir);
-            $permissions = $stat ? ((int)$stat['mode']) & 0007777 : 0755;
+            $permissions = $stat ? $stat['mode'] & 0007777 : 0755;
 
             if (!@mkdir($targetPath, $permissions, true) && !is_dir($targetPath)) {
                 return false;
@@ -241,6 +313,23 @@ class Filesystem
     }
 
     /**
+     * @param string $path
+     * @return bool
+     */
+    public function unlinkOrRemove(string $path): bool
+    {
+        try {
+            if ($this->isLink($path)) {
+                return $this->filesystem->unlink($path);
+            }
+
+            return !file_exists($path) || $this->filesystem->remove($path);
+        } catch (\Throwable $exception) {
+            return false;
+        }
+    }
+
+    /**
      * @param string $sourcePath
      * @param string $targetPath
      * @param bool $copy
@@ -259,7 +348,7 @@ class Filesystem
                 return false;
             }
 
-            file_exists($targetPath) and $this->filesystem->unlink($targetPath);
+            $this->unlinkOrRemove($targetPath);
 
             $copy
                 ? copy($sourcePath, $targetPath)

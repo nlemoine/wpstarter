@@ -28,7 +28,7 @@ final class WpStarterCommand extends BaseCommand
     /**
      * @return void
      */
-    protected function configure()
+    protected function configure(): void
     {
         $this
             ->setName('wpstarter')
@@ -51,6 +51,12 @@ final class WpStarterCommand extends BaseCommand
                 InputOption::VALUE_NONE,
                 'Ignore "skip-steps" config.'
             )
+            ->addOption(
+                'list-steps',
+                null,
+                InputOption::VALUE_NONE,
+                'List available commands.'
+            )
             ->addArgument(
                 'steps',
                 InputArgument::IS_ARRAY | InputArgument::OPTIONAL,
@@ -69,8 +75,14 @@ final class WpStarterCommand extends BaseCommand
     {
         // phpcs:enable Inpsyde.CodeQuality.ReturnTypeDeclaration
 
-        /** @var Composer $composer */
-        $composer = $this->getComposer(true, false);
+        /**
+         * @psalm-suppress DeprecatedMethod
+         * @var Composer $composer
+         */
+        $composer = method_exists($this, 'requireComposer')
+            ? $this->requireComposer(false, false)
+            : $this->getComposer(true, false);
+
         if ($composer->getPackage()->getType() === ComposerPlugin::EXTENSIONS_TYPE) {
             $this->writeError(
                 $output,
@@ -92,14 +104,20 @@ final class WpStarterCommand extends BaseCommand
                 && $input->getOption('skip-custom');
             $ignoreSkipConfig = $input->hasOption('ignore-skip-config')
                 && $input->getOption('ignore-skip-config');
+            $list = $input->hasOption('list-steps')
+                && $input->getOption('list-steps');
 
-            $flags = SelectedStepsFactory::MODE_COMMAND;
+            $flags = $list ? SelectedStepsFactory::MODE_LIST : SelectedStepsFactory::MODE_COMMAND;
             $skip and $flags |= SelectedStepsFactory::MODE_OPT_OUT;
             $skipCustom and $flags |= SelectedStepsFactory::SKIP_CUSTOM_STEPS;
             $ignoreSkipConfig and $flags |= SelectedStepsFactory::IGNORE_SKIP_STEPS_CONFIG;
 
             /** @var list<string> $selected */
             $selected = (array)($input->getArgument('steps') ?: []);
+
+            if (($selected && !$skip) && $list) {
+                throw new \Error('The `--list-steps` flag can not be combined step names.');
+            }
 
             $plugin->run(new SelectedStepsFactory($flags, ...$selected));
 
@@ -116,7 +134,7 @@ final class WpStarterCommand extends BaseCommand
      * @param string $message
      * @return void
      */
-    private function writeError(OutputInterface $output, string $message)
+    private function writeError(OutputInterface $output, string $message): void
     {
         if (!$message) {
             return;

@@ -1,10 +1,13 @@
-<?php declare(strict_types=1);
+<?php
+
 /*
  * This file is part of the WP Starter package.
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
+
+declare(strict_types=1);
 
 namespace WeCodeMore\WpStarter\Tests;
 
@@ -84,11 +87,11 @@ abstract class TestCase extends \PHPUnit\Framework\TestCase
     ): Config\Validator {
 
         $config = \Mockery::mock(Composer\Config::class);
-        $config->shouldReceive('get')->with('vendor-dir')->andReturn($vendorDir);
-        $config->shouldReceive('get')->with('bin-dir')->andReturn($binDir);
+        $config->allows('get')->with('vendor-dir')->andReturn($vendorDir);
+        $config->allows('get')->with('bin-dir')->andReturn($binDir);
         $composer = \Mockery::mock(Composer\Composer::class);
-        $composer->shouldReceive('getConfig')->andReturn($config);
-        $composer->shouldReceive('getPackage->getExtra')->andReturn($extra);
+        $composer->allows('getConfig')->andReturn($config);
+        $composer->allows('getPackage->getExtra')->andReturn($extra);
 
         $filesystem = new Composer\Util\Filesystem();
 
@@ -104,17 +107,22 @@ abstract class TestCase extends \PHPUnit\Framework\TestCase
      */
     protected function factoryLocator(...$objects): Util\Locator
     {
+        // phpcs:enable Inpsyde.CodeQuality.ArgumentTypeDeclaration
+        // phpcs:enable Generic.Metrics.NestingLevel
+
         $reflection = new \ReflectionClass(Util\Locator::class);
         /** @var Util\Locator $locator */
         $locator = $reflection->newInstanceWithoutConstructor();
 
         static $supportedObjects;
         $supportedObjects or $supportedObjects = [
+            Composer\Composer::class,
             Composer\Config::class,
             Composer\IO\IOInterface::class,
             Composer\Util\Filesystem::class,
             Composer\Util\RemoteFilesystem::class,
             Config\Config::class,
+            Util\OverwriteHelper::class,
             Util\Filesystem::class,
             Util\Paths::class,
             Io\Io::class,
@@ -126,20 +134,16 @@ abstract class TestCase extends \PHPUnit\Framework\TestCase
         ];
 
         $closure = function (...$objects) use ($supportedObjects) {
-            /** @noinspection PhpUndefinedFieldInspection */
             $this->objects = [];
             foreach ($objects as $object) {
                 foreach ($supportedObjects as $supportedObject) {
                     if (is_a($object, $supportedObject)) {
-                        /** @noinspection PhpUndefinedFieldInspection */
                         $this->objects[$supportedObject] = $object;
                         break;
                     }
                 }
             }
         };
-
-        // phpcs:enable
 
         \Closure::bind($closure, $locator, Util\Locator::class)(...$objects);
 
@@ -155,8 +159,8 @@ abstract class TestCase extends \PHPUnit\Framework\TestCase
         $root = $this->fixturesPath() . '/paths-root';
 
         $config = \Mockery::mock(Composer\Config::class);
-        $config->shouldReceive('get')->with('vendor-dir')->andReturn("{$root}/vendor");
-        $config->shouldReceive('get')->with('bin-dir')->andReturn("{$root}/vendor/bin");
+        $config->allows('get')->with('vendor-dir')->andReturn("{$root}/vendor");
+        $config->allows('get')->with('bin-dir')->andReturn("{$root}/vendor/bin");
 
         is_array($extra) or $extra = [
             'wordpress-install-dir' => 'public/wp',
@@ -164,5 +168,16 @@ abstract class TestCase extends \PHPUnit\Framework\TestCase
         ];
 
         return Util\Paths::withRoot($root, $config, $extra, new Composer\Util\Filesystem());
+    }
+
+    /**
+     * @param Composer\IO\IOInterface|null $io
+     * @return Composer\Composer
+     */
+    protected function factoryComposer(?Composer\IO\IOInterface $io = null): Composer\Composer
+    {
+        $path = getenv('PACKAGE_PATH') . '/composer.json';
+
+        return Composer\Factory::create($io ?? new TestIo(), $path, true);
     }
 }

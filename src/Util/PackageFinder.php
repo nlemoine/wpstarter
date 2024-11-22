@@ -84,7 +84,7 @@ class PackageFinder
     {
         $path = $this->installationManager->getInstallPath($package);
 
-        return $this->filesystem->normalizePath($path);
+        return is_string($path) ? $this->filesystem->normalizePath($path) : '';
     }
 
     /**
@@ -118,7 +118,7 @@ class PackageFinder
      * @param string $name
      * @return PackageInterface|null
      */
-    public function findByName(string $name)
+    public function findByName(string $name): ?PackageInterface
     {
         if (!$name) {
             return null;

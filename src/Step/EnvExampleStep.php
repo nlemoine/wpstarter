@@ -13,6 +13,7 @@ namespace WeCodeMore\WpStarter\Step;
 
 use WeCodeMore\WpStarter\Io\Io;
 use WeCodeMore\WpStarter\Config\Config;
+use WeCodeMore\WpStarter\Util\Filesystem;
 use WeCodeMore\WpStarter\Util\Locator;
 use WeCodeMore\WpStarter\Util\Paths;
 use WeCodeMore\WpStarter\Util\UrlDownloader;
@@ -25,9 +26,9 @@ use WeCodeMore\WpStarter\Util\UrlDownloader;
  * .env file and includes all the possible configuration values that WordPress uses plus a few
  * that are specific to WP Starter.
  */
-final class EnvExampleStep implements FileCreationStepInterface, OptionalStep
+final class EnvExampleStep implements FileCreationStep, OptionalStep, ConditionalStep
 {
-    public const NAME = 'build-env-example';
+    public const NAME = 'envexample';
 
     /**
      * @var Config
@@ -35,7 +36,7 @@ final class EnvExampleStep implements FileCreationStepInterface, OptionalStep
     private $config;
 
     /**
-     * @var \WeCodeMore\WpStarter\Util\Filesystem
+     * @var Filesystem
      */
     private $filesystem;
 
@@ -48,6 +49,11 @@ final class EnvExampleStep implements FileCreationStepInterface, OptionalStep
      * @var string
      */
     private $error = '';
+
+    /**
+     * @var string
+     */
+    private $reason = '';
 
     /**
      * @param Locator $locator
@@ -64,7 +70,7 @@ final class EnvExampleStep implements FileCreationStepInterface, OptionalStep
      */
     public function name(): string
     {
-        return 'build-env-example';
+        return self::NAME;
     }
 
     /**
@@ -74,10 +80,27 @@ final class EnvExampleStep implements FileCreationStepInterface, OptionalStep
      */
     public function allowed(Config $config, Paths $paths): bool
     {
-        /** @var string $envFile */
-        $envFile = $config[Config::ENV_FILE]->unwrapOrFallback('.env');
+        if ($config[Config::ENV_EXAMPLE]->is(false)) {
+            $this->reason = sprintf('disabled via "%s" configuration', Config::ENV_EXAMPLE);
 
-        return $config[Config::ENV_EXAMPLE]->not(false) && !is_file($paths->root($envFile));
+            return false;
+        }
+
+        /** @var string $envFileName */
+        $envFileName = $config[Config::ENV_FILE]->unwrapOrFallback('.env');
+        /** @var string $envDir */
+        $envDir = $config[Config::ENV_DIR]->unwrapOrFallback($paths->root());
+        $envFile = $this->filesystem->normalizePath("{$envDir}/{$envFileName}");
+
+        if (is_file($paths->root($envFile))) {
+            $this->reason = sprintf('environment file already exists', Config::ENV_EXAMPLE);
+
+            return false;
+        }
+
+        $this->reason = '';
+
+        return true;
     }
 
     /**
@@ -86,7 +109,10 @@ final class EnvExampleStep implements FileCreationStepInterface, OptionalStep
      */
     public function targetPath(Paths $paths): string
     {
-        return $paths->root('.env.example');
+        /** @var string $envDir */
+        $envDir = $this->config[Config::ENV_DIR]->unwrap();
+
+        return $this->filesystem->normalizePath("{$envDir}/.env.example");
     }
 
     /**
@@ -146,8 +172,8 @@ final class EnvExampleStep implements FileCreationStepInterface, OptionalStep
     /**
      * Download a remote .env.example in root folder.
      *
-     * @param  string $url
-     * @param  string $destination
+     * @param non-empty-string $url
+     * @param string $destination
      * @return int
      */
     private function download(string $url, string $destination): int
@@ -198,7 +224,7 @@ final class EnvExampleStep implements FileCreationStepInterface, OptionalStep
      */
     public function skipped(): string
     {
-        return '  - env.example copy skipped.';
+        return 'env.example copy skipped.';
     }
 
     /**
@@ -207,5 +233,13 @@ final class EnvExampleStep implements FileCreationStepInterface, OptionalStep
     public function success(): string
     {
         return '<comment>env.example</comment> saved successfully.';
+    }
+
+    /**
+     * @return string
+     */
+    public function conditionsNotMet(): string
+    {
+        return $this->reason;
     }
 }

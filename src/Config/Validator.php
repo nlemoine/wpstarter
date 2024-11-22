@@ -11,13 +11,14 @@ declare(strict_types=1);
 
 namespace WeCodeMore\WpStarter\Config;
 
-use Composer\Util\Filesystem;
+use Composer\Util\Filesystem as ComposerFilesystem;
 use Symfony\Component\Console\Input\StringInput;
-use WeCodeMore\WpStarter\Step\ContentDevStep;
 use WeCodeMore\WpStarter\Step\OptionalStep;
+use WeCodeMore\WpStarter\Util\DbChecker;
 use WeCodeMore\WpStarter\Util\Paths;
 use WeCodeMore\WpStarter\Util\WpVersion;
 use WeCodeMore\WpStarter\Cli;
+use WeCodeMore\WpStarter\Util\Filesystem;
 
 /**
  * All this class methods receive a "$value" coming from JSON, so we don't have type safety.
@@ -33,15 +34,15 @@ class Validator
     private $paths;
 
     /**
-     * @var Filesystem
+     * @var ComposerFilesystem
      */
     private $filesystem;
 
     /**
      * @param Paths $paths
-     * @param Filesystem $filesystem
+     * @param ComposerFilesystem $filesystem
      */
-    public function __construct(Paths $paths, Filesystem $filesystem)
+    public function __construct(Paths $paths, ComposerFilesystem $filesystem)
     {
         $this->paths = $paths;
         $this->filesystem = $filesystem;
@@ -121,27 +122,36 @@ class Validator
     public function validateScripts($value): Result
     {
         if (!$value) {
-            return Result::none();
+            return Result::ok([]);
         }
 
+        $error = 'Scripts config must an array where keys are script names (start with "pre-" or '
+            . '"post-" and values are a single callback or a list of callbacks.';
+
         if (!is_array($value)) {
-            return Result::errored('Scripts config must be either a string or an array.');
+            return Result::errored($error);
         }
 
         $allScripts = [];
 
         foreach ($value as $name => $scripts) {
-            if (!is_string($name) || !is_array($scripts)) {
-                continue;
+            if (!is_string($name) || !preg_match('~^(?:pre|post)\-.+$~i', $name)) {
+                return Result::errored($error);
             }
 
             $name = strtolower($name);
-            if (!preg_match('~^(?:pre|post)\-.+$~', $name)) {
+
+            if (is_string($scripts) && $this->isCallback($scripts)) {
+                $allScripts[$name] = [$scripts];
                 continue;
             }
 
-            $scripts = array_filter($scripts, [$this, 'isCallback']);
-            $scripts and $allScripts[$name] = $scripts;
+            if (!is_array($scripts)) {
+                return Result::errored($error);
+            }
+
+            $validScripts = array_filter($scripts, [$this, 'isCallback']);
+            $validScripts and $allScripts[$name] = array_values($validScripts);
         }
 
         if (!$allScripts) {
@@ -152,87 +162,79 @@ class Validator
     }
 
     /**
+     * @param mixed $value
+     * @return Result
+     */
+    public function validateDbCheck($value): Result
+    {
+        if (is_string($value) && (strtolower($value) === DbChecker::HEALTH_CHECK)) {
+            return Result::ok(DbChecker::HEALTH_CHECK);
+        }
+
+        return $this->validateBool($value);
+    }
+
+    /**
      * Validate an array of dropins to process.
      *
      * It is expected an array of path or URLs. Even mixed.
      *
      * @param mixed $value
      * @return Result
+     *
+     * phpcs:disable Generic.Metrics.CyclomaticComplexity
      */
     public function validateDropins($value): Result
     {
+        // phpcs:enable Generic.Metrics.CyclomaticComplexity
+
         if (!$value) {
             return Result::none();
         }
 
-        is_string($value) and $value = [$value];
-        if (!is_array($value)) {
+        if (!is_array($value) && !is_string($value)) {
             return Result::errored('Dropins config must be an array.');
         }
 
         $dropins = [];
-        foreach ($value as $name => $dropin) {
-            $check = $this->validateUrlOrPath($dropin);
-            if ($check->notEmpty()) {
-                /** @var string $dropin */
-                $dropin = $check->unwrap();
-                $dropins[is_string($name) ? $name : $dropin] = $dropin;
+        foreach ((array)$value as $basename => $dropin) {
+            $dropin = $this->validateUrlOrPath($dropin)->unwrapOrFallback(null);
+            if (($dropin === '') || !is_string($dropin)) {
+                continue;
+            }
+            if (is_numeric($basename)) {
+                $basename = filter_var($dropin, FILTER_VALIDATE_URL)
+                    ? trim((parse_url($dropin, PHP_URL_PATH) ?: ''), '/') ?: ''
+                    : basename($dropin);
+            }
+            if ($basename !== '') {
+                $dropins[$basename] = $dropin;
             }
         }
 
-        if (!$dropins) {
-            return Result::errored('No valid dropins provided.');
-        }
-
-        return Result::ok($dropins);
+        return $dropins ? Result::ok($dropins) : Result::errored('No valid dropins provided.');
     }
 
     /**
      * Validate the operation to apply for "content dev".
-     *
-     * WP Starter allows to have plugins, themes and mu-plugins in the same folder of the project
-     * itself. For WordPress to be able to recognize those, it is needed they are placed in the
-     * wp-content folder, which will also contains 3rd party plugins, themes and mu-plugins pulled
-     * via Composer. To keep things separated, and easily managed via Git, WP Starter allows
-     * "1st hand" content to be placed in a separate folder of the project and then either
-     * symlinked or copied into wp-content folder.
-     *
-     * This setting tells WP starter what to do: symlink (default) or copy the files.
-     * It is accepted:
-     * - the word "symlink"
-     * - the word "copy"
-     * - the word "none", which means do nothing
-     * - boolean true, which means default operation, i.e. "symlink"
-     * - boolean false, which means do nothing
      *
      * @param string|bool|null $value
      * @return Result
      */
     public function validateContentDevOperation($value): Result
     {
-        if ($value === null) {
-            return Result::none();
-        }
+        return $this->validateOperation(Config::CONTENT_DEV_OPERATION, $value);
+    }
 
-        if ($value === OptionalStep::ASK) {
-            return Result::ok($value);
-        }
-
-        is_string($value) and $value = trim(strtolower($value));
-        if (in_array($value, ContentDevStep::OPERATIONS, true)) {
-            return Result::ok($value);
-        }
-
-        $bool = $this->validateBool($value);
-        if (!$bool->either(true, false)) {
-            return Result::errored(
-                "'Dev Content' operation must be either: 'ask', 'symlink', 'copy', true or false."
-            );
-        }
-
-        return $bool->is(true)
-            ? Result::ok(ContentDevStep::OP_SYMLINK)
-            : Result::ok(ContentDevStep::OP_NONE);
+    /**
+     * Validate the operation to apply for "content dev".
+     *
+     * @param string|bool|null $value
+     * @return Result
+     */
+    public function validateDropinsOperation($value): Result
+    {
+        return $this->validateOperation(Config::DROPINS_OPERATION, $value);
     }
 
     /**
@@ -260,7 +262,7 @@ class Validator
             $path = $this->validatePath($value)->unwrapOrFallback();
 
             return $path
-                ? $this->validateWpCliCommandsFileList($path)
+                ? $this->validateWpCliCommandsListFile($path)
                 : Result::errored($error);
         }
 
@@ -357,57 +359,6 @@ class Validator
     }
 
     /**
-     * Validate the path of a file containing WP CLI commands.
-     *
-     * It is expected a string, that is a path to a PHP or JSON file. The file must return (if PHP)
-     * or contain (if JSON) an array of WP CLI commands as they would be run in the terminal.
-     *
-     * @param string|null $value
-     * @return Result
-     */
-    public function validateWpCliCommandsFileList($value): Result
-    {
-        if ($value === null) {
-            return Result::none();
-        }
-
-        $error = 'WP CLI commands must be either provided as path to a PHP file returning an array '
-            . 'of commands or as path to a JSON file containing the array.';
-
-        $validPath = $this->validatePath($value);
-        if (!$validPath->notEmpty()) {
-            return Result::errored($error);
-        }
-
-        /** @var string $fullpath */
-        $fullpath = $validPath->unwrap();
-        if (!is_file($fullpath) || !is_readable($fullpath)) {
-            return Result::errored("{$error} {$fullpath} is not a file or is not readable.");
-        }
-
-        $extension = strtolower((string)pathinfo($fullpath, PATHINFO_EXTENSION));
-        $isJson = $extension === 'json';
-        if ($extension !== 'php' && !$isJson) {
-            return Result::errored($error);
-        }
-
-        if ($isJson) {
-            $data = @json_decode(file_get_contents($fullpath) ?: '', true);
-
-            return is_array($data) ? $this->validateWpCliCommands($data) : Result::errored($error);
-        }
-
-        $provider = function () use ($fullpath, $error): Result {
-            $data = @include $fullpath;
-            return is_array($data)
-                ? $this->validateWpCliCommands($data)
-                : Result::errored($error);
-        };
-
-        return Result::promise($provider);
-    }
-
-    /**
      * Validate WP version.
      *
      * Checks that given value represent a valid WP version. It does not check that the version
@@ -452,7 +403,10 @@ class Validator
 
         if (!is_string($value)) {
             return Result::errored(
-                'Given value must be either a valid URL, a valid path, or a boolean, or "ask".'
+                sprintf(
+                    'Given value must be either a valid URL, a valid path, or a boolean, or "%s".',
+                    OptionalStep::ASK
+                )
             );
         }
 
@@ -478,7 +432,12 @@ class Validator
             return $this->validateUrl(trim(strtolower($value)));
         }
 
-        return Result::errored('Given value must be either a valid URL, a boolean or "ask".');
+        return Result::errored(
+            sprintf(
+                'Given value must be either a valid URL, a boolean or "%s".',
+                OptionalStep::ASK
+            )
+        );
     }
 
     /**
@@ -597,9 +556,12 @@ class Validator
      * @param mixed $value
      * @return Result
      * @see Validator::validateFileName()
+     *
+     * phpcs:disable Generic.Metrics.CyclomaticComplexity
      */
     public function validateDirName($value): Result
     {
+        // phpcs:enable Generic.Metrics.CyclomaticComplexity
         if (!is_string($value)) {
             return Result::errored('Folder name must be in a string.');
         }
@@ -632,7 +594,7 @@ class Validator
 
         // extract a prefix being a protocol://, protocol:, protocol://drive: or simply drive:
         $regex = '{^(?:[0-9a-z]{2,}+:(?://(?:[a-z]:)?)?|[a-z]:)(?:/?(.+))+}i';
-        if ($trimmed === $normalized && preg_match($regex, $trimmed, $driveStartMatch)) {
+        if (($trimmed === $normalized) && preg_match($regex, $trimmed, $driveStartMatch)) {
             $trimmed = $driveStartMatch[1] ?? '';
         }
 
@@ -808,10 +770,15 @@ class Validator
             return false;
         }
 
+        /** @psalm-suppress RedundantCondition */
+        if (is_callable($script)) {
+            return true;
+        }
+
+        /** @var string|array{string|object, string}|object $script */
+
         if (is_array($script)) {
-            return !empty($script[0])
-                && !empty($script[1])
-                && is_string($script[0])
+            return is_string($script[0])
                 && $this->isValidEntityName($script[0])
                 && $this->isValidEntityName($script[1], false);
         }
@@ -829,11 +796,67 @@ class Validator
     }
 
     /**
+     * Validate the path of a file containing WP CLI commands.
+     *
+     * It is expected a string, that is a path to a PHP or JSON file. The file must return (if PHP)
+     * or contain (if JSON) an array of WP CLI commands as they would be run in the terminal.
+     *
+     * @param mixed $value
+     * @return Result
+     */
+    private function validateWpCliCommandsListFile($value): Result
+    {
+        if ($value === null) {
+            return Result::none();
+        }
+
+        $error = 'WP CLI commands must be either provided as path to a PHP file returning an array '
+            . 'of commands or as path to a JSON file containing the array.';
+
+        $validPath = $this->validatePath($value);
+        if (!$validPath->notEmpty()) {
+            return Result::errored($error);
+        }
+
+        /** @var string $fullpath */
+        $fullpath = $validPath->unwrap();
+        if (!is_file($fullpath) || !is_readable($fullpath)) {
+            return Result::errored("{$error} {$fullpath} is not a file or is not readable.");
+        }
+
+        $extension = strtolower((string)pathinfo($fullpath, PATHINFO_EXTENSION));
+        $isJson = $extension === 'json';
+        if ($extension !== 'php' && !$isJson) {
+            return Result::errored($error);
+        }
+
+        if ($isJson) {
+            $data = @json_decode(file_get_contents($fullpath) ?: '', true);
+
+            return is_array($data) ? $this->validateWpCliCommands($data) : Result::errored($error);
+        }
+
+        $provider = function () use ($fullpath, $error): Result {
+            try {
+                $data = @include $fullpath;
+            } catch (\Throwable $throwable) {
+                return Result::errored("{$error} " . $throwable->getMessage());
+            }
+
+            return is_array($data)
+                ? $this->validateWpCliCommands($data)
+                : Result::errored($error);
+        };
+
+        return Result::promise($provider);
+    }
+
+    /**
      * @param string $value
      * @param bool $namespace
      * @return bool
      */
-    private function isValidEntityName(string $value, $namespace = true): bool
+    private function isValidEntityName(string $value, bool $namespace = true): bool
     {
         $parts = $namespace ? explode('\\', ltrim($value, '\\')) : [$value];
         foreach ($parts as $part) {
@@ -843,5 +866,60 @@ class Validator
         }
 
         return true;
+    }
+
+    /**
+     * Validate the operation to apply for "content dev".
+     *
+     * WP Starter allows to have plugins, themes and mu-plugins in the same folder of the project
+     * itself. For WordPress to be able to recognize those, it is needed they are placed in the
+     * wp-content folder, which will also contains 3rd party plugins, themes and mu-plugins pulled
+     * via Composer. To keep things separated, and easily managed via Git, WP Starter allows
+     * "1st hand" content to be placed in a separate folder of the project and then either
+     * symlinked or copied into wp-content folder.
+     *
+     * This setting tells WP starter what to do: symlink (default) or copy the files.
+     * It is accepted:
+     * - the word "auto"
+     * - the word "symlink"
+     * - the word "copy"
+     * - the word "none", which means do nothing
+     * - boolean true, which means default operation, i.e. "auto"
+     * - boolean false, which means do nothing
+     *
+     * @param string $label
+     * @param mixed $value
+     * @return Result
+     */
+    private function validateOperation(string $label, $value): Result
+    {
+        if ($value === null) {
+            return Result::none();
+        }
+
+        if ($value === OptionalStep::ASK) {
+            return Result::ok($value);
+        }
+
+        is_string($value) and $value = trim(strtolower($value));
+        if (in_array($value, Filesystem::OPERATIONS, true)) {
+            return Result::ok($value);
+        }
+
+        $bool = $this->validateBool($value);
+        if (!$bool->either(true, false)) {
+            return Result::errored(
+                sprintf(
+                    '"%s" configuration must be either: "%s", "%s", true or false.',
+                    $label,
+                    implode('", "', Filesystem::OPERATIONS),
+                    OptionalStep::ASK
+                )
+            );
+        }
+
+        return $bool->is(true)
+            ? Result::ok(Filesystem::OP_AUTO)
+            : Result::ok(Filesystem::OP_NONE);
     }
 }

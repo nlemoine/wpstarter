@@ -22,7 +22,9 @@ use WeCodeMore\WpStarter\Config\Validator;
 use WeCodeMore\WpStarter\Tests\DummyPhpTool;
 use WeCodeMore\WpStarter\Tests\IntegrationTestCase;
 use WeCodeMore\WpStarter\Io\Io;
+use WeCodeMore\WpStarter\Util\Locator;
 use WeCodeMore\WpStarter\Util\PackageFinder;
+use WeCodeMore\WpStarter\Util\Requirements;
 use WeCodeMore\WpStarter\Util\UrlDownloader;
 
 class PhpToolProcessFactoryTest extends IntegrationTestCase
@@ -30,7 +32,7 @@ class PhpToolProcessFactoryTest extends IntegrationTestCase
     /**
      * @after
      */
-    protected function after()
+    protected function after(): void
     {
         parent::tearDown();
         \Mockery::close();
@@ -40,7 +42,7 @@ class PhpToolProcessFactoryTest extends IntegrationTestCase
      * @test
      * @covers \WeCodeMore\WpStarter\Cli\PhpToolProcessFactory
      */
-    public function testCreateFailsIfNoPackageNoPharPathAndNoPharUrl()
+    public function testCreateFailsIfNoPackageNoPharPathAndNoPharUrl(): void
     {
         $factory = $this->factoryPhpToolProcessFactory();
 
@@ -54,7 +56,7 @@ class PhpToolProcessFactoryTest extends IntegrationTestCase
      * @test
      * @covers \WeCodeMore\WpStarter\Cli\PhpToolProcessFactory
      */
-    public function testCreateViaPackageFailIfMinVersionTooLow()
+    public function testCreateViaPackageFailIfMinVersionTooLow(): void
     {
         $factory = $this->factoryPhpToolProcessFactory();
 
@@ -76,7 +78,7 @@ class PhpToolProcessFactoryTest extends IntegrationTestCase
      * @test
      * @covers \WeCodeMore\WpStarter\Cli\PhpToolProcessFactory
      */
-    public function testCreateViaPackage()
+    public function testCreateViaPackage(): void
     {
         $factory = $this->factoryPhpToolProcessFactory();
 
@@ -91,7 +93,7 @@ class PhpToolProcessFactoryTest extends IntegrationTestCase
      * @test
      * @covers \WeCodeMore\WpStarter\Cli\PhpToolProcessFactory
      */
-    public function testCreateViaPharPath()
+    public function testCreateViaPharPath(): void
     {
         $factory = $this->factoryPhpToolProcessFactory();
 
@@ -105,7 +107,7 @@ class PhpToolProcessFactoryTest extends IntegrationTestCase
      * @test
      * @covers \WeCodeMore\WpStarter\Cli\PhpToolProcessFactory
      */
-    public function testCreateViaPharUrl()
+    public function testCreateViaPharUrl(): void
     {
         $url = 'https://example.com/downloads?file=some-phar';
         $dir = vfsStream::setup('directory');
@@ -116,7 +118,7 @@ class PhpToolProcessFactoryTest extends IntegrationTestCase
         $urlDownloader->shouldReceive('save')
             ->once()
             ->with($url, $path)
-            ->andReturnUsing(function (string $url, string $path): bool {
+            ->andReturnUsing(static function (string $url, string $path): bool {
                 $url and touch($path);
                 return true;
             });
@@ -129,8 +131,7 @@ class PhpToolProcessFactoryTest extends IntegrationTestCase
         $tool->pharIsValid = true;
 
         $process = $factory->create($tool);
-
-        static::assertStringContainsString('Installing ', $this->collectOutput());
+        static::assertNotFalse(strpos($this->collectOutput(), 'Installing '));
 
         $this->assertProcessWorks($process);
     }
@@ -139,7 +140,7 @@ class PhpToolProcessFactoryTest extends IntegrationTestCase
      * @test
      * @covers \WeCodeMore\WpStarter\Cli\PhpToolProcessFactory
      */
-    public function testCreateViaPharUrlFailsWhenPharCheckFails()
+    public function testCreateViaPharUrlFailsWhenPharCheckFails(): void
     {
         $url = 'https://example.com/downloads?file=some-phar';
         $dir = vfsStream::setup('directory');
@@ -150,7 +151,7 @@ class PhpToolProcessFactoryTest extends IntegrationTestCase
         $urlDownloader->shouldReceive('save')
             ->once()
             ->with($url, $path)
-            ->andReturnUsing(function (string $url, string $path): bool {
+            ->andReturnUsing(static function (string $url, string $path): bool {
                 $url and touch($path);
                 return true;
             });
@@ -172,17 +173,17 @@ class PhpToolProcessFactoryTest extends IntegrationTestCase
      * @test
      * @covers \WeCodeMore\WpStarter\Cli\PhpToolProcessFactory
      */
-    public function testRunWpCliCommandViaFileSystemBootstrap()
+    public function testRunWpCliCommandViaFileSystemBootstrap(): void
     {
         $config = new Config(
             [Config::INSTALL_WP_CLI => false],
-            new Validator($this->createPaths(), new Filesystem())
+            new Validator($this->factoryPaths(), new Filesystem())
         );
 
         $tool = new WpCliTool(
             $config,
-            $this->createUrlDownloader(),
-            new Io($this->createComposerIo())
+            $this->factoryUrlDownloader(),
+            new Io($this->factoryComposerIo())
         );
 
         $factory = $this->factoryPhpToolProcessFactory();
@@ -197,14 +198,16 @@ class PhpToolProcessFactoryTest extends IntegrationTestCase
     /**
      * @param PhpToolProcess $process
      */
-    private function assertProcessWorks(PhpToolProcess $process)
+    private function assertProcessWorks(PhpToolProcess $process): void
     {
         static::assertTrue($process->execute('-r "echo \'Hi!!!\';"'));
 
-        $output = trim($this->collectOutput());
+        $lines = array_map('trim', explode("\n", $this->collectOutput()));
+        $last = array_pop($lines);
+        $penultimate = array_pop($lines);
 
-        static::assertStringStartsWith('Dummy!', $output);
-        static::assertStringEndsWith('Hi!!!', $output);
+        static::assertSame(0, strpos($penultimate, 'Dummy!'));
+        static::assertSame('Hi!!!', substr($last, -5));
     }
 
     /**
@@ -215,22 +218,20 @@ class PhpToolProcessFactoryTest extends IntegrationTestCase
         UrlDownloader $urlDownloader = null
     ): PhpToolProcessFactory {
 
-        $urlDownloader or $urlDownloader = $this->createUrlDownloader();
+        $composer = $this->factoryComposer();
+        $io = $this->factoryComposerIo();
+        $requirements = Requirements::forGenericCommand($composer, $io, new Filesystem());
+        $locator = new Locator($requirements, $composer, $io);
 
-        $composer = $this->createComposer();
+        if (!$urlDownloader) {
+            return $locator->phpToolProcessFactory();
+        }
 
-        return new PhpToolProcessFactory(
-            $this->createPaths(),
-            new Io($this->createComposerIo()),
-            new PharInstaller(
-                new Io($this->createComposerIo()),
-                $urlDownloader
-            ),
-            new PackageFinder(
-                $composer->getRepositoryManager()->getLocalRepository(),
-                $composer->getInstallationManager(),
-                new Filesystem()
-            )
-        );
+        $paths = $locator->paths();
+        $io = $locator->io();
+        $installer =  new PharInstaller($io, $urlDownloader);
+        $finder = $locator->packageFinder();
+
+        return new PhpToolProcessFactory($paths, $io, $installer, $finder, $locator->phpProcess());
     }
 }

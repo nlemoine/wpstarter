@@ -13,6 +13,7 @@ namespace WeCodeMore\WpStarter\Step;
 
 use WeCodeMore\WpStarter\Io\Io;
 use WeCodeMore\WpStarter\Config\Config;
+use WeCodeMore\WpStarter\Util\Filesystem;
 use WeCodeMore\WpStarter\Util\OverwriteHelper;
 use WeCodeMore\WpStarter\Util\Paths;
 use WeCodeMore\WpStarter\Util\UrlDownloader;
@@ -22,7 +23,7 @@ use WeCodeMore\WpStarter\Util\UrlDownloader;
  *
  * This step is not run directly from WP Starter, but instantiated and used by `DropinsStep` only.
  */
-final class DropinStep implements FileCreationStepInterface
+final class DropinStep implements FileCreationStep
 {
     public const ACTION_COPY = 'copy';
     public const ACTION_DOWNLOAD = 'download';
@@ -38,6 +39,11 @@ final class DropinStep implements FileCreationStepInterface
     private $url;
 
     /**
+     * @var string
+     */
+    private $operation;
+
+    /**
      * @var Io
      */
     private $io;
@@ -51,6 +57,11 @@ final class DropinStep implements FileCreationStepInterface
      * @var OverwriteHelper
      */
     private $overwrite;
+
+    /**
+     * @var Filesystem
+     */
+    private $filesystem;
 
     /**
      * @var array{string, string}|array{null, null}
@@ -70,23 +81,29 @@ final class DropinStep implements FileCreationStepInterface
     /**
      * @param string $name
      * @param string $url
+     * @param string $operation
      * @param Io $io
      * @param UrlDownloader $urlDownloader
      * @param OverwriteHelper $overwrite
+     * @param Filesystem $filesystem
      */
     public function __construct(
         string $name,
         string $url,
+        string $operation,
         Io $io,
         UrlDownloader $urlDownloader,
-        OverwriteHelper $overwrite
+        OverwriteHelper $overwrite,
+        Filesystem $filesystem
     ) {
 
         $this->name = basename($name);
         $this->url = $url;
+        $this->operation = $operation;
         $this->io = $io;
         $this->urlDownloader = $urlDownloader;
         $this->overwrite = $overwrite;
+        $this->filesystem = $filesystem;
     }
 
     /**
@@ -140,7 +157,7 @@ final class DropinStep implements FileCreationStepInterface
 
         return $isDownload
             ? $this->download($source, $destination)
-            : $this->copy($source, $destination);
+            : $this->symlinkOrCopy($source, $destination);
     }
 
     /**
@@ -171,7 +188,7 @@ final class DropinStep implements FileCreationStepInterface
     /**
      * Download dropin file from given url and save it to in wp-content folder.
      *
-     * @param string $url
+     * @param non-empty-string $url
      * @param string $destination
      * @return int
      */
@@ -194,22 +211,24 @@ final class DropinStep implements FileCreationStepInterface
      * Copy dropin file from given source path and save it in wp-content folder.
      *
      * @param string $source
-     * @param string $destination
+     * @param string $target
      * @return int
      */
-    private function copy(string $source, string $destination): int
+    private function symlinkOrCopy(string $source, string $target): int
     {
-        $sourceBase = basename($source);
-        $name = basename($destination);
+        $name = basename($target);
+
         try {
-            $copied = copy($source, $destination);
+            $this->filesystem->unlinkOrRemove($target);
+            $copied = $this->filesystem->symlinkOrCopyOperation($source, $target, $this->operation);
+
             $copied
-                ? $this->success .= "<comment>{$name}</comment> copied successfully."
-                : $this->error .= "Impossible to copy {$sourceBase} to {$name}.";
+                ? $this->success .= $this->describeSuccess($name)
+                : $this->error .= $this->describeError($name, $source);
 
             return $copied ? self::SUCCESS : self::ERROR;
         } catch (\Throwable $exception) {
-            $this->error .= "Impossible to copy {$sourceBase} to {$name}.";
+            $this->error .= $this->describeError($name, $source);
 
             return self::ERROR;
         }
@@ -233,5 +252,40 @@ final class DropinStep implements FileCreationStepInterface
         }
 
         return [null, null];
+    }
+
+    /**
+     * @param string $name
+     * @return string
+     */
+    private function describeSuccess(string $name): string
+    {
+        if ($this->operation === Filesystem::OP_COPY) {
+            return "<comment>{$name}</comment> dropin copied successfully.";
+        }
+
+        if ($this->operation === Filesystem::OP_SYMLINK) {
+            return "<comment>{$name}</comment> dropin symlinked successfully.";
+        }
+
+        return "<comment>{$name}</comment> dropin published successfully.";
+    }
+
+    /**
+     * @param string $name
+     * @param string $source
+     * @return string
+     */
+    private function describeError(string $name, string $source): string
+    {
+        if ($this->operation === Filesystem::OP_COPY) {
+            return "Failed copying {$source} as {$name} dropin.";
+        }
+
+        if ($this->operation === Filesystem::OP_SYMLINK) {
+            return "Failed symlinking {$source} as {$name} dropin.";
+        }
+
+        return "Both symlink and copy from {$source} to {$name} dropin failed.";
     }
 }

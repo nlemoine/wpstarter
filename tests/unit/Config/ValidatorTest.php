@@ -1,4 +1,5 @@
-<?php declare(strict_types=1);
+<?php
+
 /*
  * This file is part of the WP Starter package.
  *
@@ -6,23 +7,23 @@
  * file that was distributed with this source code.
  */
 
+declare(strict_types=1);
+
 namespace WeCodeMore\WpStarter\Tests\Unit\Config;
 
-use WeCodeMore\WpStarter\Config\Validator;
 use WeCodeMore\WpStarter\Step\CheckPathStep;
-use WeCodeMore\WpStarter\Step\ContentDevStep;
 use WeCodeMore\WpStarter\Step\OptionalStep;
 use WeCodeMore\WpStarter\Step\WpConfigStep;
 use WeCodeMore\WpStarter\Tests\TestCase;
 use WeCodeMore\WpStarter\Cli\WpCliFileData;
+use WeCodeMore\WpStarter\Util\Filesystem;
 
 class ValidatorTest extends TestCase
 {
     /**
-     * @see Validator::validateOverwrite()
-     * @see TestCase::factoryValidator()
+     * @test
      */
-    public function testValidateOverwrite()
+    public function testValidateOverwrite(): void
     {
         $validator = $this->factoryValidator();
 
@@ -41,10 +42,9 @@ class ValidatorTest extends TestCase
     }
 
     /**
-     * @see Validator::validateSteps()
-     * @see TestCase::factoryValidator()
+     * @test
      */
-    public function testValidateSteps()
+    public function testValidateSteps(): void
     {
         $validator = $this->factoryValidator();
 
@@ -61,33 +61,35 @@ class ValidatorTest extends TestCase
     }
 
     /**
-     * @see Validator::validateScripts()
-     * @see TestCase::factoryValidator()
+     * @test
      */
-    public function testValidateScripts()
+    public function testValidateScripts(): void
     {
         $validator = $this->factoryValidator();
 
-        static::assertFalse($validator->validateScripts([])->notEmpty());
-        static::assertFalse($validator->validateScripts([])->notEmpty());
+        static::assertTrue($validator->validateScripts([])->is([]));
+        static::assertTrue($validator->validateScripts([])->is([]));
         static::assertFalse($validator->validateScripts(['xxx'])->notEmpty());
         static::assertFalse($validator->validateScripts(2)->notEmpty());
-        static::assertFalse($validator->validateScripts('xxx')->notEmpty());
-        static::assertFalse($validator->validateScripts(null)->notEmpty());
+        static::assertFalse($validator->validateScripts('xxx')->notEmpty([]));
+        static::assertTrue($validator->validateScripts(null)->is([]));
 
-        $cbsIn = ['pre-a' => ['a_function'], 'post-b' => ['b_function'], 'pre-' => ['a_function']];
-        $cbsOut = ['pre-a' => ['a_function'], 'post-b' => ['b_function']];
-        $join = ['pre-x' => ['a_function', 'b_function']];
+        $cbsInErr = ['pre-a' => ['a_func'], 'post-b' => ['b_func'], 'pre-' => ['a_function']];
+        $cbsInOk = ['pre-a' => ['a_func'], 'post-b' => ['b_func']];
+        $cbsInOkString = ['pre-a' => 'a_func', 'post-b' => ['b_func']];
+        $cbsOutExpected = ['pre-a' => ['a_func'], 'post-b' => ['b_func']];
+        $join = ['pre-x' => ['a_func', 'b_func']];
 
-        static::assertTrue($validator->validateScripts($cbsIn)->is($cbsOut));
-        static::assertTrue($validator->validateScripts($join)->is($join));
+        static::assertSame([], $validator->validateScripts($cbsInErr)->unwrapOrFallback([]));
+        static::assertSame($cbsOutExpected, $validator->validateScripts($cbsInOk)->unwrap());
+        static::assertSame($cbsOutExpected, $validator->validateScripts($cbsInOkString)->unwrap());
+        static::assertSame($join, $validator->validateScripts($join)->unwrap());
     }
 
     /**
-     * @see Validator::validateDropins()
-     * @see TestCase::factoryValidator()
+     * @test
      */
-    public function testValidateDropins()
+    public function testValidateDropins(): void
     {
         $validator = $this->factoryValidator();
 
@@ -97,35 +99,34 @@ class ValidatorTest extends TestCase
         static::assertFalse($validator->validateDropins('xx"x')->notEmpty());
         static::assertFalse($validator->validateDropins(null)->notEmpty());
 
-        $dir = str_replace('\\', '/', __DIR__);
-        $file = str_replace('\\', '/', __FILE__);
-
         $input = [
             'foo',
-            'dir' => $dir,
+            'dir' => __DIR__,
             'f"oo',
             '../foo/bar',
             'url-1' => 'https://foo/bar?x=y',
-            $file,
+            __FILE__,
             'meh',
             'https://username:password@127.0.0.1',
+            'something' => 'https://username:password@127.0.0.1',
+            'https://username:password@127.0.0.1/foo',
         ];
 
         $expected = [
-            'dir' => $dir,
+            'dir' => str_replace('\\', '/', __DIR__),
             'url-1' => 'https://foo/bar?x=y',
-            $file => $file,
-            'https://username:password@127.0.0.1' => 'https://username:password@127.0.0.1',
+            basename(__FILE__) => str_replace('\\', '/', __FILE__),
+            'something' => 'https://username:password@127.0.0.1',
+            'foo' => 'https://username:password@127.0.0.1/foo',
         ];
 
         static::assertSame($expected, $validator->validateDropins($input)->unwrap());
     }
 
     /**
-     * @see Validator::validateContentDevOperation()
-     * @see TestCase::factoryValidator()
+     * @test
      */
-    public function testValidateContentDevOperation()
+    public function testValidateContentDevOperation(): void
     {
         $validator = $this->factoryValidator();
 
@@ -137,26 +138,25 @@ class ValidatorTest extends TestCase
             ->is(OptionalStep::ASK));
 
         static::assertTrue($validator->validateContentDevOperation(false)
-            ->is(ContentDevStep::OP_NONE));
+            ->is(Filesystem::OP_NONE));
 
         static::assertTrue($validator->validateContentDevOperation(true)
-            ->is(ContentDevStep::OP_SYMLINK));
+            ->is(Filesystem::OP_AUTO));
 
-        static::assertTrue($validator->validateContentDevOperation(ContentDevStep::OP_SYMLINK)
-            ->is(ContentDevStep::OP_SYMLINK));
+        static::assertTrue($validator->validateContentDevOperation(Filesystem::OP_SYMLINK)
+            ->is(Filesystem::OP_SYMLINK));
 
-        static::assertTrue($validator->validateContentDevOperation(ContentDevStep::OP_NONE)
-            ->is(ContentDevStep::OP_NONE));
+        static::assertTrue($validator->validateContentDevOperation(Filesystem::OP_NONE)
+            ->is(Filesystem::OP_NONE));
 
-        static::assertTrue($validator->validateContentDevOperation(ContentDevStep::OP_COPY)
-            ->is(ContentDevStep::OP_COPY));
+        static::assertTrue($validator->validateContentDevOperation(Filesystem::OP_COPY)
+            ->is(Filesystem::OP_COPY));
     }
 
     /**
-     * @see Validator::validateWpCliCommands()
-     * @see TestCase::factoryValidator()
+     * @test
      */
-    public function testValidateWpCliCommands()
+    public function testValidateWpCliCommands(): void
     {
         $validator = $this->factoryValidator();
 
@@ -179,10 +179,9 @@ class ValidatorTest extends TestCase
     }
 
     /**
-     * @see Validator::validateWpCliCommand()
-     * @see TestCase::factoryValidator()
+     * @test
      */
-    public function testValidateWpCliCommand()
+    public function testValidateWpCliCommand(): void
     {
         $validator = $this->factoryValidator();
 
@@ -198,10 +197,9 @@ class ValidatorTest extends TestCase
     }
 
     /**
-     * @see Validator::validateWpCliFiles()
-     * @see TestCase::factoryValidator()
+     * @test
      */
-    public function testValidateWpCliFiles()
+    public function testValidateWpCliFiles(): void
     {
         $validator = $this->factoryValidator();
 
@@ -223,10 +221,9 @@ class ValidatorTest extends TestCase
     }
 
     /**
-     * @see Validator::validateWpVersion()
-     * @see TestCase::factoryValidator()
+     * @test
      */
-    public function testValidateWpVersion()
+    public function testValidateWpVersion(): void
     {
         $validator = $this->factoryValidator();
 
@@ -243,10 +240,9 @@ class ValidatorTest extends TestCase
     }
 
     /**
-     * @see Validator::validateBoolOrAskOrUrlOrPath()
-     * @see TestCase::factoryValidator()
+     * @test
      */
-    public function testValidateBoolOrAskOrUrlOrPath()
+    public function testValidateBoolOrAskOrUrlOrPath(): void
     {
         $validator = $this->factoryValidator();
 
@@ -269,10 +265,9 @@ class ValidatorTest extends TestCase
     }
 
     /**
-     * @see Validator::validateUrlOrPath()
-     * @see TestCase::factoryValidator()
+     * @test
      */
-    public function testValidateUrlOrPath()
+    public function testValidateUrlOrPath(): void
     {
         $validator = $this->factoryValidator();
 
@@ -289,10 +284,9 @@ class ValidatorTest extends TestCase
     }
 
     /**
-     * @see Validator::validateGlobPath()
-     * @see TestCase::factoryValidator()
+     * @test
      */
-    public function testValidateGlobPath()
+    public function testValidateGlobPath(): void
     {
         $validator = $this->factoryValidator();
 
@@ -309,10 +303,9 @@ class ValidatorTest extends TestCase
     }
 
     /**
-     * @see Validator::validateFileName()
-     * @see TestCase::factoryValidator()
+     * @test
      */
-    public function testValidateFileName()
+    public function testValidateFileName(): void
     {
         $validator = $this->factoryValidator();
 
@@ -327,10 +320,9 @@ class ValidatorTest extends TestCase
     }
 
     /**
-     * @see Validator::validateGlobPathArray()
-     * @see TestCase::factoryValidator()
+     * @test
      */
-    public function testValidateGlobPathArray()
+    public function testValidateGlobPathArray(): void
     {
         $validator = $this->factoryValidator();
 
@@ -347,10 +339,9 @@ class ValidatorTest extends TestCase
     }
 
     /**
-     * @see Validator::validateInt()
-     * @see TestCase::factoryValidator()
+     * @test
      */
-    public function testValidateInt()
+    public function testValidateInt(): void
     {
         $validator = $this->factoryValidator();
 

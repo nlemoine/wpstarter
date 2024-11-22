@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace WeCodeMore\WpStarter\Config;
 
-use WeCodeMore\WpStarter\Step\ContentDevStep;
+use WeCodeMore\WpStarter\Util\Filesystem;
 
 /**
  * Data storage for configuration.
@@ -23,20 +23,24 @@ final class Config implements \ArrayAccess
 {
     public const AUTOLOAD = 'autoload';
     public const CACHE_ENV = 'cache-env';
+    public const CHECK_VCS_IGNORE = 'check-vcs-ignore';
     public const COMMAND_STEPS = 'command-steps';
     public const COMPOSER_UPDATED_PACKAGES = 'composer-updated-packages';
     public const CONTENT_DEV_DIR = 'content-dev-dir';
     public const CONTENT_DEV_OPERATION = 'content-dev-op';
+    public const CREATE_VCS_IGNORE_FILE = 'create-vcs-ignore-file';
     public const CUSTOM_STEPS = 'custom-steps';
+    public const DB_CHECK = 'db-check';
     public const DROPINS = 'dropins';
+    public const DROPINS_OPERATION = 'dropins-op';
     public const EARLY_HOOKS_FILE = 'early-hook-file';
     public const ENV_BOOTSTRAP_DIR = 'env-bootstrap-dir';
     public const ENV_DIR = 'env-dir';
     public const ENV_EXAMPLE = 'env-example';
     public const ENV_FILE = 'env-file';
     public const INSTALL_WP_CLI = 'install-wp-cli';
-    public const IS_COMPOSER_UPDATE = 'is-composer-update';
     public const IS_COMPOSER_INSTALL = 'is-composer-install';
+    public const IS_COMPOSER_UPDATE = 'is-composer-update';
     public const IS_WPSTARTER_COMMAND = 'is-wpstarter-command';
     public const IS_WPSTARTER_SELECTED_COMMAND = 'is-wpstarter-selected-command';
     public const MOVE_CONTENT = 'move-content';
@@ -47,61 +51,68 @@ final class Config implements \ArrayAccess
     public const SKIP_DB_CHECK = 'skip-db-check';
     public const SKIP_STEPS = 'skip-steps';
     public const TEMPLATES_DIR = 'templates-dir';
-    public const UNKNOWN_DROPINS = 'unknown-dropins';
     public const WP_CLI_COMMANDS = 'wp-cli-commands';
     public const WP_CLI_FILES = 'wp-cli-files';
+    public const WP_CONFIG_PATH = 'wp-config-php-path';
     public const WP_VERSION = 'wp-version';
 
     public const DEFAULTS = [
         self::AUTOLOAD => 'wpstarter-autoload.php',
         self::CACHE_ENV => true,
+        self::CHECK_VCS_IGNORE => true,
         self::COMMAND_STEPS => null,
         self::COMPOSER_UPDATED_PACKAGES => [],
-        self::CONTENT_DEV_OPERATION => ContentDevStep::OP_SYMLINK,
         self::CONTENT_DEV_DIR => 'content-dev',
+        self::CONTENT_DEV_OPERATION => Filesystem::OP_AUTO,
+        self::CREATE_VCS_IGNORE_FILE => true,
         self::CUSTOM_STEPS => null,
+        self::DB_CHECK => true,
         self::DROPINS => null,
+        self::DROPINS_OPERATION => Filesystem::OP_AUTO,
         self::EARLY_HOOKS_FILE => '',
         self::ENV_BOOTSTRAP_DIR => null,
         self::ENV_DIR => null,
         self::ENV_EXAMPLE => true,
         self::ENV_FILE => '.env',
         self::INSTALL_WP_CLI => true,
-        self::IS_COMPOSER_UPDATE => null,
         self::IS_COMPOSER_INSTALL => null,
         self::IS_WPSTARTER_COMMAND => null,
+        self::IS_COMPOSER_UPDATE => null,
         self::IS_WPSTARTER_SELECTED_COMMAND => null,
         self::MOVE_CONTENT => false,
         self::PREVENT_OVERWRITE => null,
         self::REGISTER_THEME_FOLDER => false,
         self::REQUIRE_WP => true,
-        self::SCRIPTS => null,
+        self::SCRIPTS => [],
         self::SKIP_DB_CHECK => false,
         self::SKIP_STEPS => null,
         self::TEMPLATES_DIR => null,
-        self::UNKNOWN_DROPINS => false,
-        self::WP_CLI_COMMANDS => null,
-        self::WP_CLI_FILES => null,
+        self::WP_CLI_COMMANDS => [],
+        self::WP_CLI_FILES => [],
         self::WP_VERSION => null,
     ];
 
     public const VALIDATION_MAP = [
         self::AUTOLOAD => 'validatePath',
         self::CACHE_ENV => 'validateBool',
+        self::CHECK_VCS_IGNORE => 'validateBoolOrAsk',
         self::COMMAND_STEPS => 'validateSteps',
         self::COMPOSER_UPDATED_PACKAGES => 'validateArray',
-        self::CONTENT_DEV_OPERATION => 'validateContentDevOperation',
         self::CONTENT_DEV_DIR => 'validatePath',
+        self::CONTENT_DEV_OPERATION => 'validateContentDevOperation',
+        self::CREATE_VCS_IGNORE_FILE => 'validateBoolOrAsk',
         self::CUSTOM_STEPS => 'validateSteps',
+        self::DB_CHECK => 'validateDbCheck',
         self::DROPINS => 'validateDropins',
+        self::DROPINS_OPERATION => 'validateDropinsOperation',
         self::EARLY_HOOKS_FILE => 'validatePath',
         self::ENV_BOOTSTRAP_DIR => 'validateDirName',
-        self::ENV_DIR => 'validatePath',
+        self::ENV_DIR => 'validateDirName',
         self::ENV_EXAMPLE => 'validateBoolOrAskOrUrlOrPath',
         self::ENV_FILE => 'validateFileName',
         self::INSTALL_WP_CLI => 'validateBool',
-        self::IS_COMPOSER_UPDATE => 'validateBool',
         self::IS_COMPOSER_INSTALL => 'validateBool',
+        self::IS_COMPOSER_UPDATE => 'validateBool',
         self::IS_WPSTARTER_COMMAND => 'validateBool',
         self::IS_WPSTARTER_SELECTED_COMMAND => 'validateBool',
         self::MOVE_CONTENT => 'validateBoolOrAsk',
@@ -112,14 +123,13 @@ final class Config implements \ArrayAccess
         self::SCRIPTS => 'validateScripts',
         self::SKIP_DB_CHECK => 'validateBool',
         self::SKIP_STEPS => 'validateArray',
-        self::UNKNOWN_DROPINS => 'validateBoolOrAsk',
         self::WP_CLI_COMMANDS => 'validateWpCliCommands',
-        self::WP_CLI_FILES => 'validateWpCliCommandsFileList',
+        self::WP_CLI_FILES => 'validateWpCliFiles',
         self::WP_VERSION => 'validateWpVersion',
     ];
 
     /**
-     * @var Result[]
+     * @var array<string, Result>
      */
     private $configs;
 
@@ -219,7 +229,7 @@ final class Config implements \ArrayAccess
      * @return void
      */
     #[\ReturnTypeWillChange]
-    public function offsetSet($offset, $value)
+    public function offsetSet($offset, $value): void
     {
         if (!is_string($offset)) {
             return;
@@ -260,7 +270,6 @@ final class Config implements \ArrayAccess
      * @param mixed $value
      * @return Result
      *
-     * @psalm-suppress MissingParamType
      * phpcs:disable Inpsyde.CodeQuality.ArgumentTypeDeclaration
      */
     private function validateValue(string $name, $value): Result

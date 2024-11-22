@@ -20,9 +20,9 @@ use WeCodeMore\WpStarter\Util;
  * The automatically generated wp-cli-yml file will point the correct WordPress path, allowing
  * to run WP CLI commands from project root without having to pass the `--path` argument every time.
  */
-final class WpCliConfigStep implements FileCreationStepInterface
+final class WpCliConfigStep implements FileCreationStep
 {
-    public const NAME = 'build-wp-cli-yml';
+    public const NAME = 'wpcliconfig';
 
     /**
      * @var Util\FileContentBuilder
@@ -80,7 +80,10 @@ final class WpCliConfigStep implements FileCreationStepInterface
         $built = $this->builder->build(
             $paths,
             'wp-cli.yml',
-            ['WP_INSTALL_PATH' => $paths->relativeToRoot(Util\Paths::WP)]
+            [
+                'WP_INSTALL_PATH' => $paths->relativeToRoot(Util\Paths::WP),
+                'WP_CONFIG_PATH' => $paths->root('wp-config.php'),
+            ]
         );
 
         if (!$this->filesystem->writeContent($built, $this->targetPath($paths))) {

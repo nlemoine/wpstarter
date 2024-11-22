@@ -11,7 +11,6 @@ declare(strict_types=1);
 
 namespace WeCodeMore\WpStarter\Util;
 
-use Composer\Util\Filesystem;
 use Composer\Util\HttpDownloader;
 use Composer\Util\RemoteFilesystem;
 
@@ -84,7 +83,7 @@ class UrlDownloader
 
     /**
      * @param Filesystem $filesystem
-     * @param RemoteFilesystem $remoteFilesystem
+     * @param bool $isVerbose
      */
     private function __construct(Filesystem $filesystem, bool $isVerbose)
     {
@@ -95,7 +94,7 @@ class UrlDownloader
     /**
      * Download a URL and save content to a file.
      *
-     * @param string $url
+     * @param non-empty-string $url
      * @param string $filename
      * @return bool
      */
@@ -117,7 +116,7 @@ class UrlDownloader
         }
 
         try {
-            $this->filesystem->ensureDirectoryExists($directory);
+            $this->filesystem->createDir($directory);
             $result = $this->copyUrl($url, $filename);
         } catch (\Throwable $exception) {
             $this->error = $exception->getMessage();
@@ -130,7 +129,7 @@ class UrlDownloader
     /**
      * Perform a remote request and return the response as string.
      *
-     * @param string $url
+     * @param non-empty-string $url
      * @return string
      */
     public function fetch(string $url): string
@@ -161,7 +160,7 @@ class UrlDownloader
     }
 
     /**
-     * @param string $url
+     * @param non-empty-string $url
      * @return string
      */
     private function retrieveContents(string $url): string
@@ -192,7 +191,7 @@ class UrlDownloader
     }
 
     /**
-     * @param string $url
+     * @param non-empty-string $url
      * @param string $filename
      * @return bool
      */
