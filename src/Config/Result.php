@@ -88,7 +88,7 @@ final class Result
      * @param mixed $value
      * @param \Throwable|null $error
      */
-    private function __construct($value = null, \Throwable $error = null)
+    private function __construct($value = null, ?\Throwable $error = null)
     {
         if ($value instanceof Result) {
             $this->value = $value->value;
