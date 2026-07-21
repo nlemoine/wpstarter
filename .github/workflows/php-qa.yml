@@ -63,7 +63,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                php-ver: [ '7.4', '8.0', '8.1', '8.2' ]
+                php-ver: [ '7.4', '8.0', '8.1', '8.2', '8.3', '8.4' ]
                 composer-ver: [ '2.0', '2.1', '2.2', '2.3', '2.4', '2.5', '2.6' ]
                 dependency-versions: [ 'lowest', 'highest' ]
                 exclude:
@@ -93,8 +93,8 @@ jobs:
                 uses: shivammathur/setup-php@v2
                 with:
                     php-version: ${{ matrix.php-ver }}
-                    # WP CLI does not support yet PHP 8.2, so we hide deprecation messages
-                    ini-values: zend.assertions=1, error_reporting=${{ ((matrix.php-ver == '8.2') && 'E_ALL & ~E_DEPRECATED & ~E_STRICT') || 'E_ALL' }}, display_errors=${{ ((matrix.php-ver == '8.2') && 'Off') || 'On' }}
+                    # WP CLI and other deps emit deprecations on PHP 8.2+, so we hide deprecation messages
+                    ini-values: zend.assertions=1, error_reporting=${{ (contains(fromJSON('["8.2","8.3","8.4"]'), matrix.php-ver) && 'E_ALL & ~E_DEPRECATED & ~E_STRICT') || 'E_ALL' }}, display_errors=${{ (contains(fromJSON('["8.2","8.3","8.4"]'), matrix.php-ver) && 'Off') || 'On' }}
                     coverage: ${{ ((env.USE_COVERAGE == 'yes') && 'xdebug') || 'none' }}
 
             -   name: Adjust Composer dependencies
@@ -127,7 +127,7 @@ jobs:
         strategy:
             fail-fast: true
             matrix:
-                php-ver: [ '7.4', '8.0', '8.1', '8.2' ]
+                php-ver: [ '7.4', '8.0', '8.1', '8.2', '8.3', '8.4' ]
         steps:
             -   name: Checkout
                 uses: actions/checkout@v3
